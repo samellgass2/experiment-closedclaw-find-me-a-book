@@ -4,32 +4,40 @@
 
 - Project: `find-me-a-book`
 - Workflow: `Database Schema Design`
-- Task ID: `119`
-- Run ID: `199`
+- Task ID: `121`
+- Run ID: `202`
 
 ## Progress
 
-- Reviewed existing schema source (`database/schema.sql`) and design documentation (`docs/database-schema.md`).
-- Added a dedicated implementation plan in `docs/database-implementation-plan.md`.
-- Documented operational steps to:
-  - create DB role and database
-  - apply schema file safely
-  - validate required objects and indexes
-  - handle blockers related to DB access or configuration
+- Confirmed database schema design is complete and documented in `docs/database-schema.md`.
+- Confirmed schema implementation is complete in `database/schema.sql` with:
+  - PostgreSQL extensions and enum types (`citext`, `reading_status`, `book_format`)
+  - Core entities (`users`, `books`, `filters`)
+  - Supporting normalized entities (`authors`, `genres`, `book_authors`, `book_genres`, `user_books`, `filter_genres`)
+  - Materialized search projection (`mv_book_search`)
+  - Primary/foreign keys, domain checks, and indexes aligned to recommendation/search query paths
+- Confirmed operational rollout guidance exists in `docs/database-implementation-plan.md` for:
+  - role/database creation
+  - schema application
+  - post-apply validation and smoke checks
+  - blocker handling for environment/access issues
 
 ## Validation
 
 - Repository has no automated test harness (`Makefile`, `package.json`, and pytest config are absent).
-- Performed manual validation by ensuring the implementation plan includes explicit executable SQL/CLI commands and acceptance mapping.
+- Performed manual validation by reviewing:
+  - `docs/database-schema.md` for schema intent and relationships
+  - `database/schema.sql` for implemented DDL, constraints, and indexes
+  - `docs/database-implementation-plan.md` for executable rollout and verification steps
 
 ## Acceptance Criteria Mapping
 
-- Implementation plan documented: **Yes** (`docs/database-implementation-plan.md`)
-- Steps for creating database: **Yes** (Section 6, Step 2 and Step 3)
-- Steps for applying schema: **Yes** (Section 6, Step 5)
-- Blocked conditions for access/config issues: **Yes** (Section 12)
+- STATUS.md updated with latest progress: **Yes**
+- Reflects current database schema design state: **Yes** (`docs/database-schema.md`)
+- Reflects current schema implementation state: **Yes** (`database/schema.sql`)
+- Implementation and operational readiness documented: **Yes** (`docs/database-implementation-plan.md`)
 
 ## Notes
 
-- Plan assumes PostgreSQL 15+ and availability of `citext` extension.
-- Rollout guidance includes verification queries, smoke tests, and rollback/mitigation guidance.
+- Schema and docs are consistent on PostgreSQL 15+ as the target platform.
+- No blockers identified for file access or repository permissions in this run.

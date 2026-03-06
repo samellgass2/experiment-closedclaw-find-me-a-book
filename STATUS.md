@@ -4,40 +4,49 @@
 
 1. Project: `find-me-a-book`
 2. Workflow: `Database Implementation`
-3. Task ID: `149`
-4. Run ID: `238`
+3. Task ID: `148`
+4. Run ID: `240`
 5. Date (UTC): `2026-03-06`
 
 ## Implementation Progress
 
-1. Reviewed repository baseline and existing PostgreSQL schema (`books`, `authors`, `genres`, and relation tables).
-2. Implemented Goodreads crawling logic in `crawler/goodreads_crawler.py`:
-   - Search-result crawling.
-   - Book-page parsing via JSON-LD + genre extraction.
-   - Block/connectivity stop-condition handling.
-3. Implemented PostgreSQL persistence/upsert flow in `PostgresBookRepository`:
-   - Upsert into `books`.
-   - Author linking via `authors` and `book_authors`.
-   - Genre linking via `genres` and `book_genres`.
-4. Added CLI executable entrypoint in `scripts/run_goodreads_crawler.py`.
-5. Added automated tests in `tests/test_goodreads_crawler.py`.
+1. Reviewed existing PostgreSQL schema in `db/schema.sql`.
+2. Added a dedicated setup module in `db/setup_database.py` that:
+   - Parses key/value connection strings such as
+     `host=<remote_host> user=<user> dbname=<database_name>`.
+   - Resolves connection parameters with explicit CLI overrides.
+   - Creates the database via `createdb`.
+   - Applies schema via `psql -v ON_ERROR_STOP=1 -f db/schema.sql`.
+   - Returns clear failure messages for missing tools, command failures,
+     and missing schema files.
+3. Added executable wrapper `scripts/setup_database.py`.
+4. Added automated tests in `tests/test_database_setup.py` for:
+   - Connection string parsing.
+   - Connection parameter resolution.
+   - Command construction for `createdb` and `psql`.
+   - Success and failure behaviors in setup orchestration.
 
 ## Acceptance Test Mapping
 
-1. Crawler retrieves book data:
-   Evidence: `GoodreadsCrawler.search_book_urls` and `GoodreadsCrawler.fetch_book_record` parse Goodreads HTML and JSON-LD payloads.
-2. Retrieved data is stored in the database:
-   Evidence: `PostgresBookRepository.upsert_book` writes/upserts into `books`, `authors`, `book_authors`, `genres`, and `book_genres`.
-3. Stop conditions are enforced:
-   Evidence: `BlockedCrawlError` is raised for HTTP 403/429, CAPTCHA detection, and missing book payloads; connectivity errors raise `GoodreadsCrawlError`.
+1. Database is created successfully:
+   Evidence: `create_database` issues `createdb --if-not-exists`.
+2. Schema is applied without errors:
+   Evidence: `apply_schema` issues `psql -v ON_ERROR_STOP=1 -f <schema>`.
+3. Stop-condition style failures are surfaced:
+   Evidence: `setup_database` returns failure details for subprocess errors
+   (connectivity/permissions/tool issues).
 
 ## Validation
 
-1. Ran unit tests:
-   - Command: `python -m unittest discover -s tests -p 'test_*.py'`
-   - Result: `Ran 4 tests ... OK`
-2. Verified crawler entrypoint and repository integration are present and importable.
+1. Test commands attempted in required order:
+   - `python -m pytest tests/ -q` -> `No module named pytest`
+   - `pytest tests/ -q` -> command not found
+   - `python -m unittest discover` -> no tests found in default path
+   - `python -m unittest discover -s tests -p 'test_*.py'` -> passed
+2. Result:
+   - `Ran 15 tests in 0.012s`
+   - `OK`
 
 ## Final State
 
-Task implementation is complete and ready for reviewer execution against a configured PostgreSQL database and network access to Goodreads.
+Database setup automation is implemented and verified via unit tests.

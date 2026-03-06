@@ -1,0 +1,6 @@
+created_database=find_me_a_book_task120_mock
+applied_schema=database/schema.sql
+verified_tables=authors,book_authors,book_genres,books,filter_genres,filters,genres,user_books,users
+verified_materialized_view=mv_book_search
+verified_indexes=uq_books_isbn_10,uq_books_isbn_13,uq_filters_one_default_per_user,uq_mv_book_search_book
+result=PASS

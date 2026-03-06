@@ -4,28 +4,32 @@
 
 - Project: `find-me-a-book`
 - Workflow: `Database Schema Design`
-- Task ID: `118`
-- Run ID: `197`
+- Task ID: `119`
+- Run ID: `199`
 
 ## Progress
 
-- Designed PostgreSQL schema in `database/schema.sql`.
-- Added documentation in `docs/database-schema.md`.
-- Included required entities: `users`, `books`, and `filters`.
-- Added supporting tables and indexes for recommendation and user preference queries.
+- Reviewed existing schema source (`database/schema.sql`) and design documentation (`docs/database-schema.md`).
+- Added a dedicated implementation plan in `docs/database-implementation-plan.md`.
+- Documented operational steps to:
+  - create DB role and database
+  - apply schema file safely
+  - validate required objects and indexes
+  - handle blockers related to DB access or configuration
 
 ## Validation
 
-- Repository currently has no automated test harness (`Makefile`, `package.json`, and `pytest` config are absent).
-- Performed structural validation via manual review of DDL constraints, foreign keys, and index coverage.
+- Repository has no automated test harness (`Makefile`, `package.json`, and pytest config are absent).
+- Performed manual validation by ensuring the implementation plan includes explicit executable SQL/CLI commands and acceptance mapping.
 
 ## Acceptance Criteria Mapping
 
-- Schema documented: **Yes** (`docs/database-schema.md`)
-- Tables for books/users/filters: **Yes** (`database/schema.sql`)
-- Ready for team review and approval: **Yes** (review checklist included in schema doc)
+- Implementation plan documented: **Yes** (`docs/database-implementation-plan.md`)
+- Steps for creating database: **Yes** (Section 6, Step 2 and Step 3)
+- Steps for applying schema: **Yes** (Section 6, Step 5)
+- Blocked conditions for access/config issues: **Yes** (Section 12)
 
 ## Notes
 
-- Schema uses PostgreSQL features: `citext`, partial unique indexes, enums, arrays, and materialized view.
-- Team should confirm whether filter arrays (`excluded_author_ids`, `language_codes`) should remain denormalized or move to join tables in a later migration.
+- Plan assumes PostgreSQL 15+ and availability of `citext` extension.
+- Rollout guidance includes verification queries, smoke tests, and rollback/mitigation guidance.

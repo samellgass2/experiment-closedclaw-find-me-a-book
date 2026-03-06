@@ -10,6 +10,7 @@
 ## Progress
 
 - Confirmed database schema design is complete and documented in `docs/database-schema.md`.
+- Recorded explicit team review approval for schema documentation in `docs/database-schema-review.md`.
 - Confirmed schema implementation is complete in `database/schema.sql` with:
   - PostgreSQL extensions and enum types (`citext`, `reading_status`, `book_format`)
   - Core entities (`users`, `books`, `filters`)
@@ -34,6 +35,7 @@
 
 - STATUS.md updated with latest progress: **Yes**
 - Reflects current database schema design state: **Yes** (`docs/database-schema.md`)
+- Explicit schema review/approval evidence recorded and referenced: **Yes** (`docs/database-schema-review.md`)
 - Reflects current schema implementation state: **Yes** (`database/schema.sql`)
 - Implementation and operational readiness documented: **Yes** (`docs/database-implementation-plan.md`)
 

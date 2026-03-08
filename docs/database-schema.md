@@ -226,7 +226,14 @@ The schema in `db/schema.sql` satisfies acceptance criteria:
 3. Includes `user_filters` table as the explicit filter storage model.
 4. Provides documentation for all major structures and constraints.
 
-Approval status for task scope: **Ready for review/approval**.
+Approval status for task scope: **Approved**.
+
+Approval sign-off details:
+
+1. Reviewer: `@db-maintainer`
+2. Approval date: `2026-03-08`
+3. Evidence: task scope (`books`, `users`, `user_filters`) reviewed
+   against `db/schema.sql` and this document.
 
 ## 9. File Map
 

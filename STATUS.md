@@ -6,7 +6,7 @@
 2. Workflow: `Database Implementation`
 3. Task IDs: `148` (database setup), `149` (crawler development)
 4. Run ID: `240`
-5. Date (UTC): `2026-03-06`
+5. Date (UTC): `2026-03-08`
 
 ## Implementation Progress
 
@@ -72,8 +72,14 @@
    - `pytest tests/ -q` -> command not found
    - `python -m unittest discover` -> no tests found in default path
    - `python -m unittest discover -s tests -p 'test_*.py'` -> passed
-2. Result:
-   - `Ran 15 tests in 0.013s`
+2. Crawler-specific execution evidence (Task `149`):
+   - `python -m unittest tests.test_goodreads_crawler -v` ->
+     `Ran 4 tests ... OK`
+   - Covered crawler validation includes URL parsing/de-duplication,
+     JSON-LD extraction, publication-date fallback parsing, and PostgreSQL
+     repository upsert/relationship-linking transaction behavior.
+3. Result:
+   - `Ran 15 tests in 0.007s`
    - `OK`
 
 ## Final State

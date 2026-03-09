@@ -1,3 +1,47 @@
+# Status Update: Task 243
+
+## Core Backend API for Book Search and Filter Endpoints
+
+- Extended `GET /api/books` in `backend/app.py` with optional validated query
+  parameters:
+  - `genre`
+  - `age_min`
+  - `age_max`
+  - `subject`
+  - `spice_level`
+- Added validation and consistent `400` JSON errors for invalid inputs:
+  - duplicate parameter values (for single-value params),
+  - non-integer or out-of-range age values,
+  - unsupported `spice_level`,
+  - invalid `age_min` / `age_max` range.
+- Updated `backend/repositories/books.py` to apply filters with conditional,
+  parameterized SQL clauses so multiple filters compose conjunctively (`AND`).
+- Added repository tests verifying filter clause composition and placeholder
+  parameter usage:
+  - `tests/test_books_repository_filters.py`
+
+### `/api/books` Filter Matrix
+
+| Query parameter | Allowed values / range | DB mapping | Behavior |
+| --- | --- | --- | --- |
+| `genre` | Non-empty string, max 80 chars | `book_genres` + `genres` (`genres.code` or `genres.display_name`) | Includes books linked to matching genre code/display name (case-insensitive) |
+| `age_min` | Integer `0..120` | Derived from `books.maturity_rating` age bands (`general=0-12`, `teen=13-17`, `mature=18+`) | Keeps books whose age band upper bound is `>= age_min` |
+| `age_max` | Integer `0..120` | Derived from `books.maturity_rating` age bands (`general=0-12`, `teen=13-17`, `mature=18+`) | Keeps books whose age band lower bound is `<= age_max` |
+| `subject` | Non-empty string, max 80 chars | `books.description` | Case-insensitive `LIKE` match on description text |
+| `spice_level` | `low`, `medium`, `high` | mapped to `books.maturity_rating` (`low->general`, `medium->teen`, `high->mature`) | Filters on mapped maturity rating |
+
+Combined filters are conjunctive: every provided filter must match.
+
+Example combined request:
+
+```bash
+curl -s "http://localhost:8000/api/books?genre=fantasy&subject=friendship&spice_level=low&age_min=10&age_max=17"
+```
+
+Expected behavior: return only books that match the fantasy genre relation,
+contain "friendship" in description, map to low spice (`maturity_rating =
+general`), and overlap the requested age range.
+
 # Status Update: Task 242
 
 ## Core Backend API for Book Search and Filter Endpoints

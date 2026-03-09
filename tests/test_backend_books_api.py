@@ -41,6 +41,7 @@ class BooksApiRouteTests(unittest.TestCase):
         fetch_books_mock.assert_called_once_with(
             self.app.config["DATABASE_CONFIG"],
             query=None,
+            filters={},
         )
 
     @patch("backend.app.fetch_books")
@@ -72,6 +73,23 @@ class BooksApiRouteTests(unittest.TestCase):
         fetch_books_mock.assert_called_once_with(
             self.app.config["DATABASE_CONFIG"],
             query="test",
+            filters={},
+        )
+
+    @patch("backend.app.fetch_books")
+    def test_get_books_with_empty_q_treated_as_no_query(
+        self,
+        fetch_books_mock,
+    ) -> None:
+        fetch_books_mock.return_value = []
+
+        response = self.client.get("/api/books?q=   ")
+
+        self.assertEqual(response.status_code, 200)
+        fetch_books_mock.assert_called_once_with(
+            self.app.config["DATABASE_CONFIG"],
+            query=None,
+            filters={},
         )
 
     def test_get_books_rejects_multiple_q_values(self) -> None:
@@ -80,6 +98,88 @@ class BooksApiRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         payload = response.get_json()
         self.assertEqual(payload["error"], "invalid_parameter")
+
+    @patch("backend.app.fetch_books")
+    def test_get_books_passes_genre_filter(
+        self,
+        fetch_books_mock,
+    ) -> None:
+        fetch_books_mock.return_value = []
+
+        response = self.client.get("/api/books?genre=fantasy")
+
+        self.assertEqual(response.status_code, 200)
+        fetch_books_mock.assert_called_once_with(
+            self.app.config["DATABASE_CONFIG"],
+            query=None,
+            filters={"genre": "fantasy"},
+        )
+
+    @patch("backend.app.fetch_books")
+    def test_get_books_passes_combined_filters(
+        self,
+        fetch_books_mock,
+    ) -> None:
+        fetch_books_mock.return_value = []
+
+        response = self.client.get(
+            (
+                "/api/books?genre=fantasy&subject=friendship"
+                "&spice_level=low&age_min=10&age_max=20"
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        fetch_books_mock.assert_called_once_with(
+            self.app.config["DATABASE_CONFIG"],
+            query=None,
+            filters={
+                "genre": "fantasy",
+                "subject": "friendship",
+                "spice_level": "low",
+                "age_min": 10,
+                "age_max": 20,
+            },
+        )
+
+    @patch("backend.app.fetch_books")
+    def test_get_books_rejects_non_numeric_age_filter(
+        self,
+        fetch_books_mock,
+    ) -> None:
+        response = self.client.get("/api/books?age_min=abc")
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.get_json()
+        self.assertEqual(payload["error"], "invalid_parameter")
+        self.assertIn("age_min must be an integer", payload["message"])
+        fetch_books_mock.assert_not_called()
+
+    @patch("backend.app.fetch_books")
+    def test_get_books_rejects_unsupported_spice_level(
+        self,
+        fetch_books_mock,
+    ) -> None:
+        response = self.client.get("/api/books?spice_level=extreme")
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.get_json()
+        self.assertEqual(payload["error"], "invalid_parameter")
+        self.assertIn("spice_level must be one of", payload["message"])
+        fetch_books_mock.assert_not_called()
+
+    @patch("backend.app.fetch_books")
+    def test_get_books_rejects_invalid_age_range(
+        self,
+        fetch_books_mock,
+    ) -> None:
+        response = self.client.get("/api/books?age_min=18&age_max=12")
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.get_json()
+        self.assertEqual(payload["error"], "invalid_parameter")
+        self.assertIn("age_min cannot be greater than age_max", payload["message"])
+        fetch_books_mock.assert_not_called()
 
     @patch("backend.app.fetch_books")
     def test_get_books_returns_500_when_database_fails(

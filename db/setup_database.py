@@ -1,9 +1,10 @@
-"""Create and initialize the PostgreSQL database schema."""
+"""Create and initialize the MySQL database schema."""
 
 from __future__ import annotations
 
 import argparse
-import shlex
+import os
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -12,12 +13,13 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class DbConnectionParams:
-    """Connection parameters used by PostgreSQL client tools."""
+    """Connection parameters used by MySQL client tools."""
 
-    dbname: str
-    host: str | None = None
-    user: str | None = None
-    port: str | None = None
+    database: str
+    host: str
+    user: str
+    port: int
+    password: str
 
 
 @dataclass(frozen=True)
@@ -28,66 +30,109 @@ class SetupResult:
     message: str
 
 
-def parse_connection_string(connection: str) -> dict[str, str]:
-    """Parse a PostgreSQL key=value connection string."""
-    params: dict[str, str] = {}
-    for token in shlex.split(connection):
-        if "=" not in token:
-            continue
-        key, value = token.split("=", 1)
-        key = key.strip().lower()
-        value = value.strip()
-        if key and value:
-            params[key] = value
-    return params
-
-
-def build_client_args(params: DbConnectionParams) -> list[str]:
-    """Build common psql/createdb connection flags."""
-    args: list[str] = []
-    if params.host:
-        args.extend(["-h", params.host])
-    if params.user:
-        args.extend(["-U", params.user])
-    if params.port:
-        args.extend(["-p", params.port])
-    return args
-
-
-def run_command(command: list[str]) -> subprocess.CompletedProcess[str]:
+def run_command(
+    command: list[str],
+    stdin=None,
+) -> subprocess.CompletedProcess[str]:
     """Run shell command and return completed process."""
     return subprocess.run(
         command,
         check=True,
         text=True,
         capture_output=True,
+        stdin=stdin,
     )
+
+
+def validate_database_name(name: str) -> None:
+    """Validate db identifier to avoid injection in CREATE DATABASE."""
+    if not name:
+        raise ValueError("Database name cannot be empty.")
+    allowed = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
+    if any(char not in allowed for char in name):
+        raise ValueError(
+            "Database name must only contain letters, numbers, and underscores."
+        )
+
+
+def build_client_args(params: DbConnectionParams) -> list[str]:
+    """Build common mysql/mysqladmin connection flags."""
+    return [
+        "--host",
+        params.host,
+        "--port",
+        str(params.port),
+        "--user",
+        params.user,
+        f"--password={params.password}",
+        "--protocol=TCP",
+        "--default-character-set=utf8mb4",
+    ]
+
+
+def ensure_mysql_tools_available() -> None:
+    """Ensure required MySQL client tools are available."""
+    for tool_name in ("mysql", "mysqladmin"):
+        if shutil.which(tool_name) is None:
+            raise FileNotFoundError(
+                f"Required MySQL client tool is missing from PATH: {tool_name}"
+            )
+
+
+def check_server_reachable(params: DbConnectionParams) -> None:
+    """Verify MySQL server is reachable with provided credentials."""
+    ping_cmd = ["mysqladmin", *build_client_args(params), "ping"]
+    run_command(ping_cmd)
 
 
 def create_database(params: DbConnectionParams) -> None:
     """Create target database if it does not already exist."""
-    create_cmd = ["createdb", "--if-not-exists", *build_client_args(params)]
-    create_cmd.append(params.dbname)
+    validate_database_name(params.database)
+    sql = (
+        f"CREATE DATABASE IF NOT EXISTS `{params.database}` "
+        "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+    )
+    create_cmd = ["mysql", *build_client_args(params), "--execute", sql]
     run_command(create_cmd)
+
+
+def collect_migration_files(migrations_dir: Path) -> list[Path]:
+    """Collect migration files in deterministic order."""
+    if not migrations_dir.exists() or not migrations_dir.is_dir():
+        return []
+    return sorted(migrations_dir.glob("*.sql"))
+
+
+def apply_sql_file(params: DbConnectionParams, sql_path: Path) -> None:
+    """Apply SQL schema/migration file to target database."""
+    mysql_cmd = ["mysql", *build_client_args(params), params.database]
+    with sql_path.open("r", encoding="utf-8") as handle:
+        run_command(mysql_cmd, stdin=handle)
 
 
 def apply_schema(params: DbConnectionParams, schema_path: Path) -> None:
     """Apply SQL schema to target database."""
-    psql_cmd = [
-        "psql",
-        *build_client_args(params),
-        "-d",
-        params.dbname,
-        "-v",
-        "ON_ERROR_STOP=1",
-        "-f",
-        str(schema_path),
-    ]
-    run_command(psql_cmd)
+    apply_sql_file(params, schema_path)
 
 
-def setup_database(params: DbConnectionParams, schema_path: Path) -> SetupResult:
-    """Create database and apply schema using PostgreSQL client tools."""
+def apply_migrations(params: DbConnectionParams, migrations_dir: Path) -> None:
+    """Apply numbered migration files in order."""
+    migration_files = collect_migration_files(migrations_dir)
+    if not migration_files:
+        raise FileNotFoundError(
+            f"No migration files found in: {migrations_dir}"
+        )
+
+    for migration in migration_files:
+        apply_sql_file(params, migration)
+
+
+def setup_database(
+    params: DbConnectionParams,
+    schema_path: Path,
+    migrations_dir: Path,
+) -> SetupResult:
+    """Create database and apply schema using MySQL client tools."""
     if not schema_path.exists():
         return SetupResult(
             success=False,
@@ -95,13 +140,16 @@ def setup_database(params: DbConnectionParams, schema_path: Path) -> SetupResult
         )
 
     try:
+        ensure_mysql_tools_available()
+        check_server_reachable(params)
         create_database(params)
-        apply_schema(params, schema_path)
-    except FileNotFoundError as exc:
-        return SetupResult(
-            success=False,
-            message=f"Required PostgreSQL client tool is missing: {exc}",
-        )
+        migration_files = collect_migration_files(migrations_dir)
+        if migration_files:
+            apply_migrations(params, migrations_dir)
+        else:
+            apply_schema(params, schema_path)
+    except (FileNotFoundError, ValueError) as exc:
+        return SetupResult(success=False, message=str(exc))
     except subprocess.CalledProcessError as exc:
         stderr = (exc.stderr or "").strip()
         stdout = (exc.stdout or "").strip()
@@ -110,8 +158,8 @@ def setup_database(params: DbConnectionParams, schema_path: Path) -> SetupResult
         return SetupResult(
             success=False,
             message=(
-                "Database setup failed while running "
-                f"'{command}'. Output: {details}"
+                f"Database setup failed while running '{command}'. "
+                f"Output: {details}"
             ),
         )
 
@@ -124,56 +172,80 @@ def setup_database(params: DbConnectionParams, schema_path: Path) -> SetupResult
 
 
 def resolve_connection_params(args: argparse.Namespace) -> DbConnectionParams:
-    """Resolve connection parameters from args and optional conn string."""
-    conn_params: dict[str, str] = {}
-    if args.connection_string:
-        conn_params = parse_connection_string(args.connection_string)
+    """Resolve connection parameters from args and environment variables."""
+    database = args.database_name or os.environ.get("DEV_MYSQL_DATABASE")
+    host = args.host or os.environ.get("DEV_MYSQL_HOST")
+    user = args.user or os.environ.get("DEV_MYSQL_USER")
+    password = args.password or os.environ.get("DEV_MYSQL_PASSWORD")
+    port_raw = args.port or os.environ.get("DEV_MYSQL_PORT")
 
-    dbname = args.database_name or conn_params.get("dbname", "")
-    if not dbname:
+    missing_vars: list[str] = []
+    if not database:
+        missing_vars.append("DEV_MYSQL_DATABASE")
+    if not host:
+        missing_vars.append("DEV_MYSQL_HOST")
+    if not user:
+        missing_vars.append("DEV_MYSQL_USER")
+    if not password:
+        missing_vars.append("DEV_MYSQL_PASSWORD")
+    if not port_raw:
+        missing_vars.append("DEV_MYSQL_PORT")
+
+    if missing_vars:
+        joined = ", ".join(missing_vars)
         raise ValueError(
-            "Database name is required. Use --database-name or include "
-            "'dbname=<name>' in --connection-string."
+            "Missing MySQL connection values. Provide CLI flags or set: "
+            f"{joined}"
         )
 
-    host = args.host or conn_params.get("host")
-    user = args.user or conn_params.get("user")
-    port = args.port or conn_params.get("port")
-    return DbConnectionParams(dbname=dbname, host=host, user=user, port=port)
+    try:
+        port = int(port_raw)
+    except ValueError as exc:
+        raise ValueError("DEV_MYSQL_PORT/--port must be an integer.") from exc
+
+    return DbConnectionParams(
+        database=database,
+        host=host,
+        user=user,
+        port=port,
+        password=password,
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
     """Build CLI parser for database setup."""
     parser = argparse.ArgumentParser(
-        description="Create PostgreSQL database and apply db/schema.sql.",
+        description="Create MySQL database and apply migrations/schema.",
     )
     parser.add_argument(
         "--database-name",
-        help="Target database name. Overrides dbname from connection string.",
+        help="Target database name. Defaults to DEV_MYSQL_DATABASE.",
     )
     parser.add_argument(
         "--host",
-        help="PostgreSQL host. Overrides host from connection string.",
+        help="MySQL host. Defaults to DEV_MYSQL_HOST.",
     )
     parser.add_argument(
         "--user",
-        help="PostgreSQL user. Overrides user from connection string.",
+        help="MySQL user. Defaults to DEV_MYSQL_USER.",
+    )
+    parser.add_argument(
+        "--password",
+        help="MySQL password. Defaults to DEV_MYSQL_PASSWORD.",
     )
     parser.add_argument(
         "--port",
-        help="PostgreSQL port. Overrides port from connection string.",
-    )
-    parser.add_argument(
-        "--connection-string",
-        help=(
-            "PostgreSQL key=value string, for example "
-            "'host=db.internal user=app dbname=find_me_a_book'."
-        ),
+        help="MySQL port. Defaults to DEV_MYSQL_PORT.",
     )
     parser.add_argument(
         "--schema-path",
         default="db/schema.sql",
-        help="Path to SQL schema file.",
+        help="Path to fallback SQL schema file.",
+    )
+    parser.add_argument(
+        "--migrations-dir",
+        default="db/migrations",
+        help="Path to migration SQL files.",
     )
     return parser
 
@@ -190,7 +262,12 @@ def run_cli(argv: list[str] | None = None) -> int:
         return 1
 
     schema_path = Path(args.schema_path).resolve()
-    result = setup_database(params=params, schema_path=schema_path)
+    migrations_dir = Path(args.migrations_dir).resolve()
+    result = setup_database(
+        params=params,
+        schema_path=schema_path,
+        migrations_dir=migrations_dir,
+    )
     stream = sys.stdout if result.success else sys.stderr
     print(result.message, file=stream)
     return 0 if result.success else 1
@@ -198,4 +275,3 @@ def run_cli(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(run_cli())
-

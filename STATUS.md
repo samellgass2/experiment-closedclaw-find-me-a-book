@@ -4,86 +4,46 @@
 
 1. Project: `find-me-a-book`
 2. Workflow: `Database Implementation`
-3. Task IDs: `148` (database setup), `149` (crawler development)
-4. Run ID: `240`
-5. Date (UTC): `2026-03-08`
+3. Task ID: `148`
+4. Run ID: `382`
+5. Date (UTC): `2026-03-09`
 
 ## Implementation Progress
 
-1. Reviewed existing PostgreSQL schema in `db/schema.sql`.
-2. Added a dedicated setup module in `db/setup_database.py` that:
-   - Parses key/value connection strings such as
-     `host=<remote_host> user=<user> dbname=<database_name>`.
-   - Resolves connection parameters with explicit CLI overrides.
-   - Creates the database via `createdb`.
-   - Applies schema via `psql -v ON_ERROR_STOP=1 -f db/schema.sql`.
-   - Returns clear failure messages for missing tools, command failures,
-     and missing schema files.
-3. Added executable wrapper `scripts/setup_database.py`.
-4. Added automated tests in `tests/test_database_setup.py` for:
-   - Connection string parsing.
-   - Connection parameter resolution.
-   - Command construction for `createdb` and `psql`.
-   - Success and failure behaviors in setup orchestration.
+1. Replaced PostgreSQL-specific setup in `db/setup_database.py` with MySQL flow:
+   - Requires `mysql` and `mysqladmin` tools.
+   - Resolves connection details from `DEV_MYSQL_*` env vars (or CLI overrides).
+   - Validates DB name safety.
+   - Checks server reachability via `mysqladmin ... ping`.
+   - Creates DB with `utf8mb4`/`utf8mb4_unicode_ci`.
+   - Applies ordered migrations from `db/migrations/*.sql`.
+   - Falls back to `db/schema.sql` if no migrations are present.
+2. Added migration file `db/migrations/001_init.sql` containing MySQL/MariaDB 11-compatible schema.
+3. Replaced `db/schema.sql` with synchronized MySQL schema snapshot.
+4. Updated `tests/test_database_setup.py` to validate MySQL command construction,
+   migration handling, and stop-condition style error handling.
+5. Updated `docs/database-schema.md` to reference MySQL conventions and workflow.
 
 ## Acceptance Test Mapping
 
-1. Database is created successfully:
-   Evidence: `create_database` issues `createdb --if-not-exists`.
-2. Schema is applied without errors:
-   Evidence: `apply_schema` issues `psql -v ON_ERROR_STOP=1 -f <schema>`.
-3. Stop-condition style failures are surfaced:
-   Evidence: `setup_database` returns failure details for subprocess errors
-   (connectivity/permissions/tool issues).
-
-## Crawler Development Progress (Task 149)
-
-1. Implemented Goodreads crawler in `crawler/goodreads_crawler.py` with:
-   - Search result parsing and URL de-duplication from Goodreads HTML.
-   - Book detail extraction via JSON-LD parsing into a normalized `BookRecord`.
-   - Data normalization for ISBN, publication date, language, author list,
-     and genre list.
-2. Added persistence integration via `PostgresBookRepository`:
-   - Upsert behavior for `books` keyed by `(source_provider, external_source_id)`.
-   - Author and genre upsert/linking for `book_authors` and `book_genres`.
-   - Transaction commit/rollback behavior around multi-table writes.
-3. Added executable crawler entrypoint `scripts/run_goodreads_crawler.py`.
-4. Added automated tests in `tests/test_goodreads_crawler.py` for:
-   - Search URL extraction and de-duplication.
-   - JSON-LD book parsing and genre extraction.
-   - Publication-date parsing fallback behavior.
-   - Repository upsert path and relationship-linking commit behavior.
-
-## Crawler Issues / Risks Encountered
-
-1. Goodreads may block scraping requests (HTTP `403` / `429` or CAPTCHA):
-   - Current handling: raises `BlockedCrawlError` and exits with status `2`.
-2. Runtime PostgreSQL persistence depends on `psycopg` availability:
-   - Current handling: explicit error from `PostgresBookRepository.connect`
-     when dependency is missing.
-3. Live network crawling is not exercised in unit tests:
-   - Current validation uses deterministic HTML fixtures to verify parser and
-     persistence behavior without external network dependency.
+1. Database creation flow:
+   - `create_database` executes `CREATE DATABASE IF NOT EXISTS ... CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci` via `mysql`.
+2. Schema application flow:
+   - `setup_database` applies `db/migrations/*.sql` in sorted order; fallback is `db/schema.sql`.
+3. Stop conditions:
+   - Missing client tools detected in `ensure_mysql_tools_available`.
+   - Unreachable server/credential failures surfaced from `mysqladmin ping`.
+   - SQL apply failures surfaced from `mysql` command errors.
 
 ## Validation
 
-1. Test commands attempted in required order:
-   - `python -m pytest tests/ -q` -> `No module named pytest`
-   - `pytest tests/ -q` -> command not found
-   - `python -m unittest discover` -> no tests found in default path
-   - `python -m unittest discover -s tests -p 'test_*.py'` -> passed
-2. Crawler-specific execution evidence (Task `149`):
-   - `python -m unittest tests.test_goodreads_crawler -v` ->
-     `Ran 4 tests ... OK`
-   - Covered crawler validation includes URL parsing/de-duplication,
-     JSON-LD extraction, publication-date fallback parsing, and PostgreSQL
-     repository upsert/relationship-linking transaction behavior.
-3. Result:
-   - `Ran 15 tests in 0.007s`
-   - `OK`
+1. `python -m pytest tests/ -q` -> failed (`No module named pytest`).
+2. `pytest tests/ -q` -> failed (`command not found`).
+3. `python -m unittest discover` -> no tests discovered.
+4. `python -m unittest discover -s tests -p 'test_*.py'` -> passed (`Ran 16 tests ... OK`).
 
-## Final State
+## Runtime Blocker
 
-Workflow #18 status now includes both database setup (Task 148) and crawler
-development (Task 149), with implementation progress, known issues, and test
-validation captured in one status document.
+1. No `DEV_MYSQL_*` environment variables are present in this run environment.
+2. Direct local probe `mysql -e "SELECT VERSION();"` fails with socket connection error,
+   so live DB creation/apply cannot be verified against provided credentials in this run.

@@ -2,52 +2,38 @@
 
 ## Summary
 
-Implemented database setup automation for project `find-me-a-book` using
-PostgreSQL client tools (`createdb`, `psql`) and added tests to validate the
-setup workflow and stop-condition error handling.
+Migrated database setup from PostgreSQL tooling to MySQL/MariaDB tooling,
+implemented numbered migrations, and updated schema/tests/docs accordingly.
 
 ## Deliverables
 
 1. `db/setup_database.py`
-   - Parses optional key/value connection strings.
-   - Resolves host/user/port/dbname with explicit argument overrides.
-   - Creates database with `createdb --if-not-exists`.
-   - Applies schema with `psql -v ON_ERROR_STOP=1 -f db/schema.sql`.
-   - Returns clear failure messages for missing tools, missing schema, and
-     subprocess errors (e.g., connectivity/permission failures).
-2. `scripts/setup_database.py`
-   - Executable wrapper script for CLI usage.
-3. `tests/test_database_setup.py`
-   - Unit tests for parsing, parameter resolution, command construction, and
-     success/failure behavior.
-4. `STATUS.md`
-   - Updated for TASK_ID=148 / RUN_ID=240 with acceptance mapping and test
-     evidence.
+   - Uses `mysql`/`mysqladmin` instead of `psql`/`createdb`.
+   - Reads `DEV_MYSQL_HOST`, `DEV_MYSQL_PORT`, `DEV_MYSQL_USER`,
+     `DEV_MYSQL_PASSWORD`, `DEV_MYSQL_DATABASE` (or CLI overrides).
+   - Verifies required tools and server reachability.
+   - Creates database with `utf8mb4` + `utf8mb4_unicode_ci`.
+   - Applies `db/migrations/*.sql` in order, with schema fallback.
+2. `db/migrations/001_init.sql`
+   - MySQL-compatible schema for all project tables, indexes, and constraints.
+3. `db/schema.sql`
+   - Synced MySQL schema snapshot.
+4. `tests/test_database_setup.py`
+   - Updated for MySQL command construction and migration workflow.
+5. `docs/database-schema.md`
+   - Updated engine and operational documentation to MySQL.
+6. `STATUS.md`
+   - Updated with implementation and blocker details for this run.
 
-## Acceptance Test Validation
+## Test Results
 
-1. Database creation flow:
-   - Verified by tests asserting `createdb` command invocation.
-2. Schema application flow:
-   - Verified by tests asserting `psql` invocation with
-     `ON_ERROR_STOP=1` and schema path.
-3. Error/stop-condition handling:
-   - Verified by tests asserting failed subprocess output is surfaced.
+1. `python -m pytest tests/ -q` -> `No module named pytest`
+2. `pytest tests/ -q` -> `command not found`
+3. `python -m unittest discover` -> `NO TESTS RAN`
+4. `python -m unittest discover -s tests -p 'test_*.py'` -> `Ran 16 tests ... OK`
 
-## Testing
+## Blocked Reason
 
-1. Attempted `python -m pytest tests/ -q`:
-   - Failed: `No module named pytest`
-2. Attempted `pytest tests/ -q`:
-   - Failed: command not found
-3. Attempted `python -m unittest discover`:
-   - Result: no tests discovered in default location
-4. Ran `python -m unittest discover -s tests -p 'test_*.py'`:
-   - Result: `Ran 15 tests ... OK`
-
-## Operational Usage
-
-1. Local/default:
-   - `python scripts/setup_database.py --database-name find_me_a_book`
-2. Remote host via required key/value format:
-   - `python scripts/setup_database.py --connection-string "host=<remote_host> user=<user> dbname=<database_name>"`
+Live acceptance validation (actual DB create + schema apply on MySQL server)
+could not be completed in this environment because `DEV_MYSQL_*` credentials
+are not present and local default MySQL endpoint is unreachable.

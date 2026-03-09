@@ -1,3 +1,16 @@
+# Status Update: Task 209
+
+## User Interface Wireframes for Search, Filters, and Results
+
+- Added main search view wireframes document:
+  [docs/ui/wireframes-main-search.md](docs/ui/wireframes-main-search.md)
+- Included desktop and mobile low- to mid-fidelity layouts using ASCII blocks.
+- Clearly labeled global navigation, main search input, primary search CTA,
+  prominent filters entry point, and results/empty-state regions.
+- Documented interaction states for pre-search empty state and post-search
+  results state, with explicit UX checklist alignment from
+  `docs/ui/ux-foundations.md`.
+
 # Status Update: Task 208
 
 ## User Interface Wireframes for Search, Filters, and Results

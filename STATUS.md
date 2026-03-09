@@ -1,3 +1,58 @@
+# Status Update: Task 242
+
+## Core Backend API for Book Search and Filter Endpoints
+
+- Implemented `GET /api/books` in `backend/app.py`.
+- Added parameter handling for `q`:
+  - Missing `q`: returns a default list (latest books, limit 20).
+  - Present `q`: performs free-text search across book title, description,
+    and author names.
+  - Multiple `q` values or a value longer than 200 chars: returns `400`.
+- Added repository layer module at `backend/repositories/books.py` with
+  parameterized SQL (using `%s` placeholders) and row mapping to stable
+  JSON keys:
+  - `id`
+  - `title`
+  - `author`
+  - `genre`
+  - `age_rating`
+  - `description`
+- Added database error handling for `/api/books`: DB connection/query failures
+  return `500` with JSON payload:
+  - `{"error":"database_unavailable","message":"Unable to fetch books at this time."}`
+- Added route tests at `tests/test_backend_books_api.py` covering:
+  - default behavior without `q`
+  - search behavior with `q`
+  - invalid duplicate `q` parameter
+  - database failure path
+
+### API Examples
+
+1. Default list:
+```bash
+curl -s "http://localhost:8000/api/books"
+```
+Example response:
+```json
+[
+  {
+    "id": 3,
+    "title": "The Great Adventure",
+    "author": "Alex Carter",
+    "genre": "Fantasy",
+    "age_rating": "teen",
+    "description": "An epic coming-of-age journey."
+  }
+]
+```
+
+2. Search by text:
+```bash
+curl -s "http://localhost:8000/api/books?q=alex"
+```
+Search semantics: case-insensitive `LIKE` matching against title, description,
+and joined author names.
+
 # Status Update: Task 241
 
 ## Core Backend API for Book Search and Filter Endpoints

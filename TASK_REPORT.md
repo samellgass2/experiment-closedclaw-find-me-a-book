@@ -1,55 +1,34 @@
-# Task Report: 241
+# Task Report: TASK_ID=242 RUN_ID=446
 
 ## Summary
+Implemented the core backend book search API endpoint with a dedicated repository layer.
 
-Implemented the initial backend service structure for the Core Backend API
-workflow using Flask, including an executable app entrypoint, reusable runtime
-configuration module for MySQL settings, dependency manifest, and status
-documentation updates.
+## Changes
+1. Added `GET /api/books` in `backend/app.py`.
+2. Added `backend/repositories/books.py` with parameterized SQL queries and row-to-JSON mapping.
+3. Added `backend/repositories/__init__.py`.
+4. Added API route tests in `tests/test_backend_books_api.py`.
+5. Updated `STATUS.md` with endpoint behavior, query semantics, and curl/response examples.
 
-Updated files:
+## Endpoint Behavior
+- `GET /api/books` with no `q`: returns default list of latest books (limit 20).
+- `GET /api/books?q=<text>`: searches title, description, and author names using parameterized `LIKE` placeholders.
+- Invalid query inputs:
+  - multiple `q` values -> `400 invalid_parameter`
+  - `q` longer than 200 chars -> `400 invalid_parameter`
+- Database connection/query failures -> `500 database_unavailable` JSON payload.
 
-- [backend/__init__.py](backend/__init__.py)
-- [backend/app.py](backend/app.py)
-- [backend/config.py](backend/config.py)
-- [requirements.txt](requirements.txt)
-- [STATUS.md](STATUS.md)
-- [.gitignore](.gitignore)
-
-## What was implemented
-
-1. Created new `backend/` Python package for API service code.
-2. Added `backend/app.py` Flask entrypoint with:
-   - `create_app()` factory
-   - basic structured logging initialization
-   - `GET /` health route returning JSON payload
-   - module runner via `python -m backend.app`
-3. Added `backend/config.py` with typed dataclass configuration:
-   - `DatabaseConfig` loaded from `DEV_MYSQL_*` environment variables
-   - `AppConfig` with debug/log-level controls
-   - reusable `load_database_config()` and `load_app_config()` helpers
-4. Added `requirements.txt` including:
-   - `Flask`
-   - `PyMySQL`
-5. Updated `STATUS.md` with Task 241 section documenting framework choice,
-   backend entrypoint path, env alignment with existing DB setup, and local run
-   command.
-6. Updated `.gitignore` to ignore local virtual environments (`.venv/`, `venv/`)
-   so repository commits stay clean.
+## Acceptance Criteria Mapping
+1. `/api/books` without `q` returns `200` and default list behavior is documented in `STATUS.md`.
+2. `/api/books?q=test` uses search across title/author/description and returns stable object keys (`id`, `title`, `author`, `genre`, `age_rating`, `description`).
+3. SQL resides in repository module (`backend/repositories/books.py`) and uses `%s` placeholders.
+4. DB-unreachable path returns non-200 (`500`) with safe JSON error payload.
+5. `STATUS.md` includes endpoint docs, `q` semantics, and curl/response examples.
 
 ## Validation
+Command run:
+- `DEV_MYSQL_HOST=dev-mysql DEV_MYSQL_PORT=3306 DEV_MYSQL_USER=devagent DEV_MYSQL_PASSWORD=*** DEV_MYSQL_DATABASE=dev_find_me_a_book python -m unittest discover -s tests -v`
 
-Acceptance checks:
-
-1. `python -m backend.app` started successfully and served `GET /` as HTTP 200.
-   - Response body: `{\"service\":\"find-me-a-book-backend\",\"status\":\"ok\"}`
-2. `backend/config.py` exists and exposes database configuration sourced from
-   environment variables.
-3. `requirements.txt` includes both web framework and MySQL driver.
-4. `STATUS.md` includes startup instructions and backend structure summary.
-
-Test commands run:
-
-1. `python -m pytest tests/ -q` -> FAIL (`No module named pytest` in environment)
-2. `pytest tests/ -q` -> FAIL (`pytest: command not found`)
-3. `python -m unittest discover -s tests -v` -> PASS (`Ran 25 tests`, `OK`)
+Result:
+- `OK (skipped=4)`
+- The 4 skipped tests are the new Flask route tests, skipped because Flask is not installed in this runner.

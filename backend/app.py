@@ -5,9 +5,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 
 from .config import AppConfig, load_app_config
+from .repositories.books import BookRepositoryError, fetch_books
 
 
 def _configure_logging(log_level: str) -> None:
@@ -36,6 +37,55 @@ def create_app(config: AppConfig | None = None) -> Flask:
             "service": "find-me-a-book-backend",
         }
         return jsonify(payload), 200
+
+    @app.get("/api/books")
+    def get_books() -> tuple[Any, int]:
+        q_values = request.args.getlist("q")
+        if len(q_values) > 1:
+            return (
+                jsonify(
+                    {
+                        "error": "invalid_parameter",
+                        "message": "Use a single q query parameter value.",
+                    }
+                ),
+                400,
+            )
+
+        query: str | None = None
+        if q_values:
+            incoming = q_values[0].strip()
+            if len(incoming) > 200:
+                return (
+                    jsonify(
+                        {
+                            "error": "invalid_parameter",
+                            "message": "q must be 200 characters or fewer.",
+                        }
+                    ),
+                    400,
+                )
+            if incoming:
+                query = incoming
+
+        try:
+            books = fetch_books(
+                app.config["DATABASE_CONFIG"],
+                query=query,
+            )
+        except BookRepositoryError:
+            logger.exception("Failed to fetch books from repository.")
+            return (
+                jsonify(
+                    {
+                        "error": "database_unavailable",
+                        "message": "Unable to fetch books at this time.",
+                    }
+                ),
+                500,
+            )
+
+        return jsonify(books), 200
 
     return app
 

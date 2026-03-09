@@ -122,15 +122,16 @@ Use this checklist during review:
 ### Discussion 2 (Final Approval Review)
 
 1. Review date (UTC): `2026-03-09`
-2. Approvers:
+2. Review participants / approvers:
    - Priya N. (Crawler Engineering)
    - Marco L. (Data Platform)
    - Elena R. (Product)
-3. Final decision: `Approved`
-4. Evidence:
+3. Sign-off status: `Completed`
+4. Final decision: `Approved`
+5. Evidence:
    - Review completed in Workflow #19 final approval sync.
    - Checklist in Section 8 reviewed with no additional mandatory attributes.
-5. Decision notes:
+6. Decision notes:
    - `genres[]` remains optional (recommended) for this phase.
    - `subtitle` remains deferred; no blocker for Task 153 acceptance.
 

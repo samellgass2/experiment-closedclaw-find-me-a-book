@@ -3,47 +3,50 @@
 ## Task Metadata
 
 1. Project: `find-me-a-book`
-2. Workflow: `Database Implementation`
-3. Task ID: `148`
-4. Run ID: `382`
+2. Workflow: `Crawler Development`
+3. Task ID: `153`
+4. Run ID: `394`
 5. Date (UTC): `2026-03-09`
 
 ## Implementation Progress
 
-1. Replaced PostgreSQL-specific setup in `db/setup_database.py` with MySQL flow:
-   - Requires `mysql` and `mysqladmin` tools.
-   - Resolves connection details from `DEV_MYSQL_*` env vars (or CLI overrides).
-   - Validates DB name safety.
-   - Checks server reachability via `mysqladmin ... ping`.
-   - Creates DB with `utf8mb4`/`utf8mb4_unicode_ci`.
-   - Applies ordered migrations from `db/migrations/*.sql`.
-   - Falls back to `db/schema.sql` if no migrations are present.
-2. Added migration file `db/migrations/001_init.sql` containing MySQL/MariaDB 11-compatible schema.
-3. Replaced `db/schema.sql` with synchronized MySQL schema snapshot.
-4. Updated `tests/test_database_setup.py` to validate MySQL command construction,
-   migration handling, and stop-condition style error handling.
-5. Updated `docs/database-schema.md` to reference MySQL conventions and workflow.
+1. Added requirements spec `docs/goodreads-crawler-requirements.md` defining the
+   Goodreads crawler extraction contract.
+2. Documented all current crawler attributes by domain:
+   - Identity and bibliographic metadata.
+   - Social proof signals.
+   - Relationship lists (`authors`, `genres`).
+3. Captured normalization and validation rules for each attribute, including
+   defaults and nullability behavior.
+4. Mapped each extracted field to existing MySQL schema targets (`books`,
+   `authors`, `genres`, relationship tables).
+5. Documented blocked/error handling expectations for crawler operations.
+6. Added a review checklist and two-step discussion log structure to support
+   team approval workflow.
 
 ## Acceptance Test Mapping
 
-1. Database creation flow:
-   - `create_database` executes `CREATE DATABASE IF NOT EXISTS ... CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci` via `mysql`.
-2. Schema application flow:
-   - `setup_database` applies `db/migrations/*.sql` in sorted order; fallback is `db/schema.sql`.
-3. Stop conditions:
-   - Missing client tools detected in `ensure_mysql_tools_available`.
-   - Unreachable server/credential failures surfaced from `mysqladmin ping`.
-   - SQL apply failures surfaced from `mysql` command errors.
+1. Acceptance requirement: "Review the documented attributes with the team for
+   approval."
+2. Support delivered in requirements doc:
+   - Explicit attribute inventory and required/optional status.
+   - Decision checklist for approval gate.
+   - Discussion sections for draft + final sign-off sessions.
+3. Stop-condition support:
+   - Discussion log is structured as two review rounds, matching the defined
+     stop condition if consensus is not reached.
 
 ## Validation
 
-1. `python -m pytest tests/ -q` -> failed (`No module named pytest`).
-2. `pytest tests/ -q` -> failed (`command not found`).
-3. `python -m unittest discover` -> no tests discovered.
-4. `python -m unittest discover -s tests -p 'test_*.py'` -> passed (`Ran 16 tests ... OK`).
+1. Verified requirements align with implemented extraction fields in
+   `crawler/goodreads_crawler.py` (`BookRecord` and parse helpers).
+2. Ran Python test suite:
+   - `python -m pytest tests/ -q` -> failed (`No module named pytest`).
+   - `pytest tests/ -q` -> failed (`command not found`).
+   - `python -m unittest discover` -> no tests discovered.
+   - `python -m unittest discover -s tests -p 'test_*.py'` -> passed.
 
-## Runtime Blocker
+## Outcome
 
-1. No `DEV_MYSQL_*` environment variables are present in this run environment.
-2. Direct local probe `mysql -e "SELECT VERSION();"` fails with socket connection error,
-   so live DB creation/apply cannot be verified against provided credentials in this run.
+1. Crawler attribute requirements are now documented and ready for team review.
+2. No code-path behavior changes were introduced in this task.

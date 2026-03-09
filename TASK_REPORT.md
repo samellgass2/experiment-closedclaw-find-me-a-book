@@ -1,44 +1,38 @@
-# Task Report: 154
+# Task Report: 155
 
 ## Summary
 
-Implemented Goodreads crawler persistence for MySQL and validated that crawler
-records can be retrieved and stored in the database without errors.
+Implemented and executed stronger crawler-to-MySQL integration tests to verify
+that persisted crawler data is complete, correct, and stable across upserts.
 
 ## Deliverables
 
-1. `crawler/goodreads_crawler.py`
-   - Added `MySQLConnectionConfig` and `resolve_mysql_config(...)`.
-   - Implemented `MySQLBookRepository` with MySQL-compatible upsert SQL.
-   - Updated CLI to use `DEV_MYSQL_*` env vars / `--db-*` flags.
-   - Added transient retry behavior (up to three attempts) in HTTP fetch logic.
-   - Improved book ID extraction from parsed URL paths.
-   - Kept `PostgresBookRepository` as a compatibility alias.
-2. `crawler/__init__.py`
-   - Exported `MySQLBookRepository` and `resolve_mysql_config`.
-3. `tests/test_goodreads_crawler.py`
-   - Updated repository tests for MySQL upsert semantics.
-   - Added MySQL config resolution tests.
-4. `tests/test_crawler_mysql_integration.py`
-   - Added integration coverage for mocked Goodreads retrieval and real MySQL
-     persistence verification.
-5. `STATUS.md`
-   - Updated task status and validation evidence for TASK_ID=154/RUN_ID=396.
+1. `tests/test_crawler_mysql_integration.py`
+   - Added reusable helpers for MySQL connection, fixture generation, crawl
+     execution, persisted-row fetching, and cleanup.
+   - Added `test_crawler_persistence_stores_complete_book_payload`:
+     - Crawls mocked Goodreads search/detail HTML.
+     - Persists into MySQL.
+     - Verifies core `books` fields plus author/genre relation integrity.
+   - Added `test_repository_upsert_updates_rows_without_duplicate_links`:
+     - Executes two upserts for same external source ID.
+     - Verifies updated values are written to same `books.id`.
+     - Verifies no duplicate rows in `book_authors` and `book_genres`.
 
 ## Acceptance Coverage
 
-1. Requirement: crawler retrieves and stores book data in database.
-2. Verified by integration test path:
-   - Crawler search + detail parsing executed.
-   - Parsed book persisted to MySQL.
-   - Stored book and relationship rows verified by SQL assertions.
+1. Requirement: run tests that verify data integrity and completeness in DB.
+2. Verified by integration tests asserting:
+   - Correct values persisted for metadata fields.
+   - Complete relationship persistence for authors and genres.
+   - Correct update behavior and no duplicate linkage rows.
 
 ## Test Results
 
-1. `python scripts/setup_database.py` (with `DEV_MYSQL_*`) -> success.
-2. `python -m unittest discover -s tests -p 'test_*.py'` (with `DEV_MYSQL_*`) ->
-   `Ran 19 tests ... OK`.
+1. `python -m unittest discover -s tests -v`
+2. Outcome: `Ran 20 tests ... OK`.
 
 ## Notes
 
-No infrastructure/CI changes were made.
+1. `pytest` is not installed in this runtime, so the Python test suite was run
+   with `unittest discover`.

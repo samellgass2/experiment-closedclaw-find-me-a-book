@@ -1,48 +1,55 @@
-# Task Report: 212
+# Task Report: 241
 
 ## Summary
 
-Consolidated the search, filters, and results wireframes into one implementation
-overview and updated workflow status completion notes.
+Implemented the initial backend service structure for the Core Backend API
+workflow using Flask, including an executable app entrypoint, reusable runtime
+configuration module for MySQL settings, dependency manifest, and status
+documentation updates.
 
 Updated files:
 
-- [docs/ui/wireframes-overview.md](docs/ui/wireframes-overview.md)
+- [backend/__init__.py](backend/__init__.py)
+- [backend/app.py](backend/app.py)
+- [backend/config.py](backend/config.py)
+- [requirements.txt](requirements.txt)
 - [STATUS.md](STATUS.md)
+- [.gitignore](.gitignore)
 
 ## What was implemented
 
-1. Added a new overview document linking all three core wireframe docs:
-   - [docs/ui/wireframes-main-search.md](docs/ui/wireframes-main-search.md)
-   - [docs/ui/wireframes-filters-panel.md](docs/ui/wireframes-filters-panel.md)
-   - [docs/ui/wireframes-results-and-items.md](docs/ui/wireframes-results-and-items.md)
-2. Documented an end-to-end user flow from landing on search, to executing
-   query, to applying filters, to reviewing updated results.
-3. Captured key interaction patterns, including:
-   - mobile filter drawer open/stage/apply behavior
-   - desktop and mobile results update behavior after filter changes
-   - responsiveness and load-feel expectations
-4. Added an explicit open UX questions/tradeoffs section for follow-on frontend
-   tasks.
-5. Explicitly stated project-spec alignment that major views (search, filters,
-   results) are complete and ready to guide frontend implementation.
-6. Updated `STATUS.md` with a final workflow note linking to the new overview
-   and marking core discovery wireframes complete.
+1. Created new `backend/` Python package for API service code.
+2. Added `backend/app.py` Flask entrypoint with:
+   - `create_app()` factory
+   - basic structured logging initialization
+   - `GET /` health route returning JSON payload
+   - module runner via `python -m backend.app`
+3. Added `backend/config.py` with typed dataclass configuration:
+   - `DatabaseConfig` loaded from `DEV_MYSQL_*` environment variables
+   - `AppConfig` with debug/log-level controls
+   - reusable `load_database_config()` and `load_app_config()` helpers
+4. Added `requirements.txt` including:
+   - `Flask`
+   - `PyMySQL`
+5. Updated `STATUS.md` with Task 241 section documenting framework choice,
+   backend entrypoint path, env alignment with existing DB setup, and local run
+   command.
+6. Updated `.gitignore` to ignore local virtual environments (`.venv/`, `venv/`)
+   so repository commits stay clean.
 
 ## Validation
 
-Executed test commands per repository guidance:
+Acceptance checks:
 
-1. `python -m pytest tests/ -q` -> fails in environment (`No module named pytest`)
-2. `python -m unittest discover -s tests -v` -> PASS (`Ran 25 tests`, `OK`)
+1. `python -m backend.app` started successfully and served `GET /` as HTTP 200.
+   - Response body: `{\"service\":\"find-me-a-book-backend\",\"status\":\"ok\"}`
+2. `backend/config.py` exists and exposes database configuration sourced from
+   environment variables.
+3. `requirements.txt` includes both web framework and MySQL driver.
+4. `STATUS.md` includes startup instructions and backend structure summary.
 
-Acceptance checks verified:
+Test commands run:
 
-1. `docs/ui/wireframes-overview.md` exists.
-2. The overview links all three required wireframe documents.
-3. The overview describes end-to-end search -> filter -> results flow with
-   references to specific wireframe elements.
-4. The overview explicitly states major-view coverage and implementation
-   readiness.
-5. Open UX questions/tradeoffs section is included.
-6. `STATUS.md` reflects completion and links the overview.
+1. `python -m pytest tests/ -q` -> FAIL (`No module named pytest` in environment)
+2. `pytest tests/ -q` -> FAIL (`pytest: command not found`)
+3. `python -m unittest discover -s tests -v` -> PASS (`Ran 25 tests`, `OK`)

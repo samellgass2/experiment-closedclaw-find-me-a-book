@@ -1,3 +1,20 @@
+# Status Update: Task 241
+
+## Core Backend API for Book Search and Filter Endpoints
+
+- Added initial backend service package at `backend/` with Flask as the API
+  framework baseline for Backend API Development.
+- Added app entrypoint at `backend/app.py` with an app factory and health check
+  route `GET /` returning JSON status for service readiness checks.
+- Added reusable configuration module at `backend/config.py` that exposes typed
+  app and database settings from environment variables, aligned to existing
+  MySQL setup keys: `DEV_MYSQL_HOST`, `DEV_MYSQL_PORT`, `DEV_MYSQL_USER`,
+  `DEV_MYSQL_PASSWORD`, `DEV_MYSQL_DATABASE`.
+- Added dependency manifest `requirements.txt` including `Flask` and `PyMySQL`
+  for web serving and MySQL connectivity in future API endpoints.
+- Local start command for development: `python -m backend.app` (serves on
+  `http://0.0.0.0:8000`).
+
 # Status Update: Task 212
 
 ## User Interface Wireframes for Search, Filters, and Results

@@ -1,3 +1,17 @@
+# Status Update: Task 210
+
+## User Interface Wireframes for Search, Filters, and Results
+
+- Added filters panel wireframes document:
+  [docs/ui/wireframes-filters-panel.md](docs/ui/wireframes-filters-panel.md)
+- Included desktop sidebar and mobile drawer treatments with grouped controls for
+  genre, age appropriateness, subject matter, character dynamics, and spice
+  level.
+- Documented applied-filter surfacing (chips + filter badge), plus individual
+  and global clear interactions.
+- Added conceptual UI-to-data mapping notes to support upcoming backend and
+  crawler alignment.
+
 # Status Update: Task 209
 
 ## User Interface Wireframes for Search, Filters, and Results

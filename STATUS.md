@@ -1,3 +1,49 @@
+# Status Update: Task 244
+
+## Core Backend API for Book Search and Filter Endpoints
+
+- Added end-to-end backend API integration tests in
+  `tests/test_books_api.py` for `GET /api/books`.
+- Tests use a temporary, isolated MySQL schema created per test run:
+  - creates schema `dev_find_me_a_book_task244_<timestamp>`
+  - applies `db/migrations/001_init.sql`
+  - seeds representative records across genres, age ratings, subjects, and
+    spice-level mappings
+  - drops the schema in teardown
+- Coverage added for core behavior:
+  - free-text search (`q`) match case
+  - free-text search no-results case
+  - per-filter behavior: `genre`, `age_min/age_max`, `subject`,
+    `spice_level`
+  - combined filters intersection behavior
+  - invalid parameter handling (`age_min=abc`) with `400` JSON error payload
+
+### How To Run The Book API Tests
+
+From repository root:
+
+```bash
+python -m unittest tests.test_books_api -v
+```
+
+Required environment variables:
+
+- `DEV_MYSQL_HOST`
+- `DEV_MYSQL_PORT`
+- `DEV_MYSQL_USER`
+- `DEV_MYSQL_PASSWORD`
+
+Optional:
+
+- `DEV_MYSQL_DATABASE` is not required for this suite because it provisions
+  and tears down its own temporary schema.
+
+Notes:
+
+- The test module skips gracefully if `Flask` or `PyMySQL` are not installed.
+- No manual database setup is required for this specific suite beyond providing
+  the MySQL environment variables above.
+
 # Status Update: Task 243
 
 ## Core Backend API for Book Search and Filter Endpoints

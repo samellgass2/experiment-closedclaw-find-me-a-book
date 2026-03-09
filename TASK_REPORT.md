@@ -1,45 +1,55 @@
-# Task Report: TASK_ID=209 RUN_ID=409
+# Task Report: TASK_ID=210 / RUN_ID=410
 
 ## Summary
 
-Created main search view wireframes for the "User Interface Wireframes for
+Implemented filters panel wireframes for the "User Interface Wireframes for
 Search, Filters, and Results" workflow.
 
-## Completed Deliverables
+### Delivered
 
-1. Added [docs/ui/wireframes-main-search.md](docs/ui/wireframes-main-search.md)
-   with low- to mid-fidelity wireframes using ASCII layout sketches.
-2. Included both desktop and mobile representations.
-3. Clearly labeled:
-   - global navigation (where present)
-   - main search input
-   - primary search CTA
-   - prominent filters entry point
-   - placeholder/results region for empty and populated states
-4. Documented interaction states for:
-   - pre-search empty state
-   - post-search state with results
-5. Explicitly referenced UX checklist alignment items from
-   `docs/ui/ux-foundations.md` (prominent search, explicit query state,
-   visible/removable applied filters, mobile one-hand usability, visible
-   sort/result count).
-6. Updated [STATUS.md](STATUS.md) with a task-209 status section linking to the
-   new wireframes document.
+1. Added [docs/ui/wireframes-filters-panel.md](docs/ui/wireframes-filters-panel.md)
+   with low- to mid-fidelity desktop and mobile filter experiences.
+2. Included required filter controls for:
+   - genre
+   - age appropriateness
+   - subject matter
+   - character dynamics
+   - spice level
+3. Documented applied-filter surfacing and clearing behaviors:
+   - chips above results
+   - filter button badge/count
+   - clear individual filter
+   - clear all filters
+4. Added conceptual UI-to-data mapping notes for backend/crawler planning.
+5. Updated [STATUS.md](STATUS.md) with Task 210 summary and link to the new
+   wireframes document.
 
-## Acceptance Test Verification
+## Acceptance Criteria Check
 
-1. `docs/ui/wireframes-main-search.md` exists: PASS
-2. Desktop and mobile layout representations included: PASS
-3. Search input, filtering entry point, and results/empty area identified: PASS
-4. At least two UX checklist items explicitly referenced: PASS
-5. Interaction states include pre-search and post-search with results: PASS
-6. `STATUS.md` updated with link to wireframes doc: PASS
+1. `docs/ui/wireframes-filters-panel.md` exists: PASS
+2. Desktop + mobile treatments present: PASS
+3. Required filter dimensions represented: PASS
+4. Applied filters + clear controls represented: PASS
+5. Conceptual data mapping section present: PASS
+6. `STATUS.md` updated with link: PASS
 
-## Validation Commands
+## Validation
 
-- `python -m pytest tests/ -q` -> FAIL (`No module named pytest` in environment)
-- `pytest tests/ -q` -> FAIL (`pytest: command not found` in environment)
-- `python -m unittest discover` -> no tests discovered at repo root
-- `python -m unittest discover -s tests -v` -> PASS (25 tests, OK)
+Commands run:
 
-No code outside task scope was modified.
+```bash
+python --version
+python -m pytest tests/ -q
+pytest tests/ -q
+python -m unittest discover -s tests -v
+```
+
+Results:
+
+- `python -m pytest tests/ -q`: failed (`pytest` module not installed)
+- `pytest tests/ -q`: failed (`pytest` command not found)
+- `python -m unittest discover -s tests -v`: PASS (25 tests)
+
+## Commit
+
+- `c90da81` - `task/210: add filters panel wireframes for desktop and mobile`

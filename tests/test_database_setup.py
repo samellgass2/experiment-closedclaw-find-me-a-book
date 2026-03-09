@@ -8,12 +8,15 @@ from unittest.mock import patch
 
 from db.setup_database import (
     DbConnectionParams,
+    REQUIRED_TABLES,
     apply_migrations,
     build_client_args,
     collect_migration_files,
     create_database,
+    run_scalar_query,
     resolve_connection_params,
     setup_database,
+    validate_setup,
     validate_database_name,
 )
 
@@ -187,6 +190,7 @@ class MigrationTests(unittest.TestCase):
 
 
 class SetupDatabaseTests(unittest.TestCase):
+    @patch("db.setup_database.validate_setup")
     @patch("db.setup_database.apply_schema")
     @patch("db.setup_database.apply_migrations")
     @patch("db.setup_database.collect_migration_files")
@@ -201,6 +205,7 @@ class SetupDatabaseTests(unittest.TestCase):
         collect_migrations_mock,
         apply_migrations_mock,
         apply_schema_mock,
+        validate_setup_mock,
     ):
         params = DbConnectionParams(
             database="find_me_a_book",
@@ -222,6 +227,7 @@ class SetupDatabaseTests(unittest.TestCase):
         create_db_mock.assert_called_once_with(params)
         apply_migrations_mock.assert_called_once_with(params, migrations_dir)
         apply_schema_mock.assert_not_called()
+        validate_setup_mock.assert_called_once_with(params)
 
     def test_setup_database_fails_for_missing_schema(self):
         params = DbConnectionParams(
@@ -283,6 +289,113 @@ class SetupDatabaseTests(unittest.TestCase):
         )
         self.assertFalse(result.success)
         self.assertIn("connection refused", result.message)
+
+    @patch("db.setup_database.validate_setup")
+    @patch("db.setup_database.apply_schema")
+    @patch("db.setup_database.collect_migration_files")
+    @patch("db.setup_database.create_database")
+    @patch("db.setup_database.check_server_reachable")
+    @patch("db.setup_database.ensure_mysql_tools_available")
+    def test_setup_database_surfaces_validation_error(
+        self,
+        _tools_mock,
+        _reachable_mock,
+        _create_db_mock,
+        _apply_schema_mock,
+        collect_migrations_mock,
+        validate_setup_mock,
+    ):
+        collect_migrations_mock.return_value = []
+        validate_setup_mock.side_effect = ValueError("validation failed")
+        params = DbConnectionParams(
+            database="find_me_a_book",
+            host="db.example",
+            user="book_user",
+            password="secret",
+            port=3306,
+        )
+        result = setup_database(
+            params,
+            Path("/workspace/db/schema.sql"),
+            Path("/workspace/db/migrations"),
+        )
+        self.assertFalse(result.success)
+        self.assertIn("validation failed", result.message)
+
+
+class ValidationTests(unittest.TestCase):
+    @patch("db.setup_database.run_command")
+    def test_run_scalar_query_returns_first_line(self, run_command_mock):
+        run_command_mock.return_value = subprocess.CompletedProcess(
+            args=["mysql"],
+            returncode=0,
+            stdout="1\nignored\n",
+            stderr="",
+        )
+        params = DbConnectionParams(
+            database="find_me_a_book",
+            host="db.example",
+            user="book_user",
+            password="secret",
+            port=3306,
+        )
+
+        value = run_scalar_query(params, "SELECT 1;")
+
+        self.assertEqual(value, "1")
+
+    @patch("db.setup_database.run_command")
+    def test_validate_setup_runs_expected_checks(self, run_command_mock):
+        run_command_mock.side_effect = [
+            subprocess.CompletedProcess(
+                args=["mysql"],
+                returncode=0,
+                stdout="1\n",
+                stderr="",
+            ),
+            subprocess.CompletedProcess(
+                args=["mysql"],
+                returncode=0,
+                stdout="find_me_a_book\n",
+                stderr="",
+            ),
+            subprocess.CompletedProcess(
+                args=["mysql"],
+                returncode=0,
+                stdout=f"{len(REQUIRED_TABLES)}\n",
+                stderr="",
+            ),
+        ]
+        params = DbConnectionParams(
+            database="find_me_a_book",
+            host="db.example",
+            user="book_user",
+            password="secret",
+            port=3306,
+        )
+
+        validate_setup(params)
+
+        self.assertEqual(run_command_mock.call_count, 3)
+
+    @patch("db.setup_database.run_command")
+    def test_validate_setup_fails_when_select_one_wrong(self, run_command_mock):
+        run_command_mock.return_value = subprocess.CompletedProcess(
+            args=["mysql"],
+            returncode=0,
+            stdout="2\n",
+            stderr="",
+        )
+        params = DbConnectionParams(
+            database="find_me_a_book",
+            host="db.example",
+            user="book_user",
+            password="secret",
+            port=3306,
+        )
+
+        with self.assertRaises(ValueError):
+            validate_setup(params)
 
 
 if __name__ == "__main__":

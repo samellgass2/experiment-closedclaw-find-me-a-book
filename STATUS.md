@@ -4,49 +4,50 @@
 
 1. Project: `find-me-a-book`
 2. Workflow: `Crawler Development`
-3. Task ID: `153`
-4. Run ID: `394`
+3. Task ID: `154`
+4. Run ID: `396`
 5. Date (UTC): `2026-03-09`
 
 ## Implementation Progress
 
-1. Added requirements spec `docs/goodreads-crawler-requirements.md` defining the
-   Goodreads crawler extraction contract.
-2. Documented all current crawler attributes by domain:
-   - Identity and bibliographic metadata.
-   - Social proof signals.
-   - Relationship lists (`authors`, `genres`).
-3. Captured normalization and validation rules for each attribute, including
-   defaults and nullability behavior.
-4. Mapped each extracted field to existing MySQL schema targets (`books`,
-   `authors`, `genres`, relationship tables).
-5. Documented blocked/error handling expectations for crawler operations.
-6. Added a review checklist and two-step discussion log structure to support
-   team approval workflow.
+1. Refactored Goodreads persistence from PostgreSQL-specific logic to MySQL:
+   - Added `MySQLBookRepository` using `pymysql`.
+   - Replaced `ON CONFLICT ... RETURNING` SQL with MySQL
+     `ON DUPLICATE KEY UPDATE` and `LAST_INSERT_ID(...)` patterns.
+2. Updated crawler CLI database wiring:
+   - Removed `DATABASE_URL`/PostgreSQL dependency from runtime path.
+   - Added env-aware MySQL connection resolution via
+     `DEV_MYSQL_HOST`, `DEV_MYSQL_PORT`, `DEV_MYSQL_USER`,
+     `DEV_MYSQL_PASSWORD`, `DEV_MYSQL_DATABASE`.
+3. Added resilient fetch behavior in crawler HTTP layer:
+   - Retries transient fetch failures for up to three attempts.
+   - Keeps blocked responses (`403`, `429`, CAPTCHA) as immediate blocked errors.
+4. Improved URL handling and normalization:
+   - Canonical Goodreads book URL extraction now uses parsed URL path handling.
+5. Updated package exports and tests to reflect MySQL repository support.
+6. Added new integration test validating crawler retrieval + MySQL storage flow.
 
 ## Acceptance Test Mapping
 
-1. Acceptance requirement: "Review the documented attributes with the team for
-   approval."
-2. Support delivered in requirements doc:
-   - Explicit attribute inventory and required/optional status.
-   - Decision checklist for approval gate.
-   - Discussion sections for draft + final sign-off sessions.
-3. Stop-condition support:
-   - Discussion log is structured as two review rounds, matching the defined
-     stop condition if consensus is not reached.
+1. Acceptance requirement: "Crawler retrieves and stores book data in the
+   database without errors."
+2. Coverage delivered:
+   - Unit tests for parser and repository upsert behavior.
+   - Integration test `tests/test_crawler_mysql_integration.py`:
+     - Mocks Goodreads HTML retrieval through crawler flow.
+     - Persists parsed record into real MySQL database.
+     - Verifies `books`, `book_authors`, and `book_genres` linkage.
 
 ## Validation
 
-1. Verified requirements align with implemented extraction fields in
-   `crawler/goodreads_crawler.py` (`BookRecord` and parse helpers).
-2. Ran Python test suite:
-   - `python -m pytest tests/ -q` -> failed (`No module named pytest`).
-   - `pytest tests/ -q` -> failed (`command not found`).
-   - `python -m unittest discover` -> no tests discovered.
-   - `python -m unittest discover -s tests -p 'test_*.py'` -> passed.
+1. Database setup/migrations:
+   - `python scripts/setup_database.py` with `DEV_MYSQL_*` env vars -> success.
+2. Test suite:
+   - `python -m unittest discover -s tests -p 'test_*.py'` with
+     `DEV_MYSQL_*` env vars -> `Ran 19 tests ... OK`.
 
 ## Outcome
 
-1. Crawler attribute requirements are now documented and ready for team review.
-2. No code-path behavior changes were introduced in this task.
+1. Goodreads crawler logic now supports MySQL persistence in this repository's
+   target stack.
+2. End-to-end retrieval-to-storage path is tested and passing.

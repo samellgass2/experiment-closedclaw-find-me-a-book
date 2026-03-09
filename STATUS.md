@@ -1,3 +1,18 @@
+# Status Update: Task 211
+
+## User Interface Wireframes for Search, Filters, and Results
+
+- Added results list and item wireframes document:
+  [docs/ui/wireframes-results-and-items.md](docs/ui/wireframes-results-and-items.md)
+- Included desktop and mobile results-list representations, with explicit
+  above-the-fold item visibility notes for each viewport.
+- Defined item anatomy covering title, author, genre, audience/age, subject
+  tags, spice level, and character dynamics for quick suitability scans.
+- Documented result navigation patterns (desktop pagination plus mobile
+  load-more / infinite-scroll option) and state-restoration behavior.
+- Captured sticky query + filter visibility patterns so context remains
+  available while scrolling, plus detail-view entry points from each result.
+
 # Status Update: Task 210
 
 ## User Interface Wireframes for Search, Filters, and Results

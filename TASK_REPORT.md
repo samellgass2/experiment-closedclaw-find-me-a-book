@@ -1,55 +1,44 @@
-# Task Report: TASK_ID=210 / RUN_ID=410
+# Task Report: 211
 
 ## Summary
 
-Implemented filters panel wireframes for the "User Interface Wireframes for
-Search, Filters, and Results" workflow.
+Completed wireframe documentation for the results list and result-item design in:
 
-### Delivered
+- [docs/ui/wireframes-results-and-items.md](docs/ui/wireframes-results-and-items.md)
 
-1. Added [docs/ui/wireframes-filters-panel.md](docs/ui/wireframes-filters-panel.md)
-   with low- to mid-fidelity desktop and mobile filter experiences.
-2. Included required filter controls for:
+Updated status tracking in:
+
+- [STATUS.md](STATUS.md)
+
+## What was implemented
+
+1. Added desktop and mobile wireframe representations of the results list.
+2. Included above-the-fold visibility expectations for both viewport types.
+3. Defined result item anatomy with required metadata:
+   - title
+   - author
    - genre
-   - age appropriateness
-   - subject matter
+   - audience/age rating
+   - subject tags
+   - spice level indicator
    - character dynamics
-   - spice level
-3. Documented applied-filter surfacing and clearing behaviors:
-   - chips above results
-   - filter button badge/count
-   - clear individual filter
-   - clear all filters
-4. Added conceptual UI-to-data mapping notes for backend/crawler planning.
-5. Updated [STATUS.md](STATUS.md) with Task 210 summary and link to the new
-   wireframes document.
-
-## Acceptance Criteria Check
-
-1. `docs/ui/wireframes-filters-panel.md` exists: PASS
-2. Desktop + mobile treatments present: PASS
-3. Required filter dimensions represented: PASS
-4. Applied filters + clear controls represented: PASS
-5. Conceptual data mapping section present: PASS
-6. `STATUS.md` updated with link: PASS
+4. Documented multi-result navigation patterns:
+   - desktop pagination
+   - mobile load-more, with infinite-scroll alternative notes
+5. Documented persistent visibility/access for search query and active filters
+   while scrolling (sticky context + chip rail + filter badge).
+6. Added detail-view entry points from each result item (`Title` / `View details`).
+7. Updated `STATUS.md` to mark results and item wireframes complete and linked.
 
 ## Validation
 
-Commands run:
+Executed test commands per repository guidance:
 
-```bash
-python --version
-python -m pytest tests/ -q
-pytest tests/ -q
-python -m unittest discover -s tests -v
-```
+1. `python -m pytest tests/ -q` -> fails in environment (`No module named pytest`)
+2. `pytest tests/ -q` -> fails in environment (`pytest: command not found`)
+3. `python -m unittest discover` -> no tests discovered at repo root
+4. `python -m unittest discover -s tests -v` -> PASS (`Ran 25 tests`, `OK`)
 
-Results:
-
-- `python -m pytest tests/ -q`: failed (`pytest` module not installed)
-- `pytest tests/ -q`: failed (`pytest` command not found)
-- `python -m unittest discover -s tests -v`: PASS (25 tests)
-
-## Commit
-
-- `c90da81` - `task/210: add filters panel wireframes for desktop and mobile`
+No application code behavior changes were introduced; this task is documentation
+focused, and acceptance criteria are satisfied by the new wireframe doc and
+status update.

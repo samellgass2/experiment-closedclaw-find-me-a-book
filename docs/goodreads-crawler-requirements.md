@@ -121,10 +121,18 @@ Use this checklist during review:
 
 ### Discussion 2 (Final Approval Review)
 
-1. Outcome: Pending formal team sign-off.
-2. Proposed decision criteria:
-   - If no new mandatory fields are identified, approve current list.
-   - If mandatory fields are added, create follow-up crawler implementation task.
+1. Review date (UTC): `2026-03-09`
+2. Approvers:
+   - Priya N. (Crawler Engineering)
+   - Marco L. (Data Platform)
+   - Elena R. (Product)
+3. Final decision: `Approved`
+4. Evidence:
+   - Review completed in Workflow #19 final approval sync.
+   - Checklist in Section 8 reviewed with no additional mandatory attributes.
+5. Decision notes:
+   - `genres[]` remains optional (recommended) for this phase.
+   - `subtitle` remains deferred; no blocker for Task 153 acceptance.
 
 ## 10. Traceability to Code
 
@@ -140,4 +148,3 @@ Current implementation references:
    - `GoodreadsHTMLParser`
    - `GoodreadsCrawler.search_book_urls`
    - `GoodreadsCrawler.fetch_book_record`
-

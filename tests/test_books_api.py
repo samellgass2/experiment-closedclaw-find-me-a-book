@@ -154,6 +154,9 @@ class BooksApiIntegrationTests(unittest.TestCase):
     @classmethod
     def _seed_fixture_data(cls, connection: Any) -> dict[str, str]:
         seed_tag = cls.schema_name.replace("dev_find_me_a_book_", "")
+        genre_code_tag = "".join(
+            ch if ch.isalnum() else "-" for ch in seed_tag.lower()
+        ).strip("-")
 
         def make_title(base: str) -> str:
             return f"{base} [{seed_tag}]"
@@ -192,25 +195,25 @@ class BooksApiIntegrationTests(unittest.TestCase):
 
             cursor.execute(
                 "INSERT INTO genres (code, display_name) VALUES (%s, %s)",
-                (f"{seed_tag[:24]}-fantasy", "Fantasy"),
+                (f"{genre_code_tag[:24]}-fantasy", "Fantasy"),
             )
             fantasy_genre_id = int(cursor.lastrowid)
 
             cursor.execute(
                 "INSERT INTO genres (code, display_name) VALUES (%s, %s)",
-                (f"{seed_tag[:24]}-scifi", "Science Fiction"),
+                (f"{genre_code_tag[:24]}-scifi", "Science Fiction"),
             )
             scifi_genre_id = int(cursor.lastrowid)
 
             cursor.execute(
                 "INSERT INTO genres (code, display_name) VALUES (%s, %s)",
-                (f"{seed_tag[:24]}-romance", "Romance"),
+                (f"{genre_code_tag[:24]}-romance", "Romance"),
             )
             romance_genre_id = int(cursor.lastrowid)
 
             cursor.execute(
                 "INSERT INTO genres (code, display_name) VALUES (%s, %s)",
-                (f"{seed_tag[:24]}-nonfiction", "Nonfiction"),
+                (f"{genre_code_tag[:24]}-nonfiction", "Nonfiction"),
             )
             nonfiction_genre_id = int(cursor.lastrowid)
 

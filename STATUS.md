@@ -1,3 +1,19 @@
+# Status Update: Task 212
+
+## User Interface Wireframes for Search, Filters, and Results
+
+- Added consolidated wireframes overview:
+  [docs/ui/wireframes-overview.md](docs/ui/wireframes-overview.md)
+- Documented the end-to-end core discovery flow from landing on search, to
+  applying filters, to reviewing and iterating on results.
+- Captured key interaction patterns across desktop and mobile, including
+  mobile filter drawer behavior, results update behavior after filter changes,
+  and responsiveness/load-feel expectations.
+- Summarized open UX questions and tradeoffs to guide implementation choices in
+  upcoming frontend tasks.
+- Final note: core book discovery wireframes are complete for this workflow and
+  ready to guide frontend implementation.
+
 # Status Update: Task 211
 
 ## User Interface Wireframes for Search, Filters, and Results

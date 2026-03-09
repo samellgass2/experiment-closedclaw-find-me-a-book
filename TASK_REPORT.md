@@ -1,44 +1,48 @@
-# Task Report: 211
+# Task Report: 212
 
 ## Summary
 
-Completed wireframe documentation for the results list and result-item design in:
+Consolidated the search, filters, and results wireframes into one implementation
+overview and updated workflow status completion notes.
 
-- [docs/ui/wireframes-results-and-items.md](docs/ui/wireframes-results-and-items.md)
+Updated files:
 
-Updated status tracking in:
-
+- [docs/ui/wireframes-overview.md](docs/ui/wireframes-overview.md)
 - [STATUS.md](STATUS.md)
 
 ## What was implemented
 
-1. Added desktop and mobile wireframe representations of the results list.
-2. Included above-the-fold visibility expectations for both viewport types.
-3. Defined result item anatomy with required metadata:
-   - title
-   - author
-   - genre
-   - audience/age rating
-   - subject tags
-   - spice level indicator
-   - character dynamics
-4. Documented multi-result navigation patterns:
-   - desktop pagination
-   - mobile load-more, with infinite-scroll alternative notes
-5. Documented persistent visibility/access for search query and active filters
-   while scrolling (sticky context + chip rail + filter badge).
-6. Added detail-view entry points from each result item (`Title` / `View details`).
-7. Updated `STATUS.md` to mark results and item wireframes complete and linked.
+1. Added a new overview document linking all three core wireframe docs:
+   - [docs/ui/wireframes-main-search.md](docs/ui/wireframes-main-search.md)
+   - [docs/ui/wireframes-filters-panel.md](docs/ui/wireframes-filters-panel.md)
+   - [docs/ui/wireframes-results-and-items.md](docs/ui/wireframes-results-and-items.md)
+2. Documented an end-to-end user flow from landing on search, to executing
+   query, to applying filters, to reviewing updated results.
+3. Captured key interaction patterns, including:
+   - mobile filter drawer open/stage/apply behavior
+   - desktop and mobile results update behavior after filter changes
+   - responsiveness and load-feel expectations
+4. Added an explicit open UX questions/tradeoffs section for follow-on frontend
+   tasks.
+5. Explicitly stated project-spec alignment that major views (search, filters,
+   results) are complete and ready to guide frontend implementation.
+6. Updated `STATUS.md` with a final workflow note linking to the new overview
+   and marking core discovery wireframes complete.
 
 ## Validation
 
 Executed test commands per repository guidance:
 
 1. `python -m pytest tests/ -q` -> fails in environment (`No module named pytest`)
-2. `pytest tests/ -q` -> fails in environment (`pytest: command not found`)
-3. `python -m unittest discover` -> no tests discovered at repo root
-4. `python -m unittest discover -s tests -v` -> PASS (`Ran 25 tests`, `OK`)
+2. `python -m unittest discover -s tests -v` -> PASS (`Ran 25 tests`, `OK`)
 
-No application code behavior changes were introduced; this task is documentation
-focused, and acceptance criteria are satisfied by the new wireframe doc and
-status update.
+Acceptance checks verified:
+
+1. `docs/ui/wireframes-overview.md` exists.
+2. The overview links all three required wireframe documents.
+3. The overview describes end-to-end search -> filter -> results flow with
+   references to specific wireframe elements.
+4. The overview explicitly states major-view coverage and implementation
+   readiness.
+5. Open UX questions/tradeoffs section is included.
+6. `STATUS.md` reflects completion and links the overview.

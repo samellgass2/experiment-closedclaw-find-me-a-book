@@ -746,3 +746,82 @@ an end-to-end UX foundation for frontend implementation.
 ## Overall Verdict
 
 `PASS`
+
+# Tester Report: Workflow #23 (Core Backend API for Book Search and Filter Endpoints)
+
+Date: 2026-03-09
+Branch: workflow/23/dev
+Role: TESTER (verification only, no code changes)
+
+## Tests Run and Results
+
+1. `python -m pytest tests/ -q`
+- Result: FAILED to start test runner (`No module named pytest`).
+
+2. `pytest tests/ -q`
+- Result: FAILED to start test runner (`pytest: command not found`).
+
+3. `python -m unittest discover -s tests -v` (before installing dependencies)
+- Result: PASSED with skips (`Ran 46 tests`, `OK`, `skipped=18`) due to missing `Flask` for API tests.
+
+4. `python -m pip install -r requirements.txt`
+- Result: PASSED (installed Flask; PyMySQL already present).
+
+5. `python -m unittest discover -s tests -v` (after dependencies installed)
+- Result: PASSED (`Ran 46 tests in 0.468s`, `OK`, no skips).
+
+6. Runtime smoke checks with live server:
+- Started service with `python -m backend.app`
+- `GET /` returned `200` with JSON: `{"service":"find-me-a-book-backend","status":"ok"}`
+- `GET /api/books` returned `200` with JSON list payload
+- `GET /api/books?age_min=abc` returned `400` with JSON error payload
+
+## Per-Task Acceptance Verdict
+
+- Task #241: PASS
+- Task #242: PASS
+- Task #243: PASS
+- Task #244: PASS
+
+## Acceptance Criteria Verification Notes
+
+Task #241:
+- Backend structure exists at `backend/` with entrypoint `backend/app.py`.
+- `python -m backend.app` starts server; `GET /` responds `200` JSON health payload.
+- `backend/config.py` exposes env-driven DB config (`DEV_MYSQL_*`).
+- `requirements.txt` includes `Flask` and `PyMySQL`.
+- `STATUS.md` documents framework, entrypoint, and start command.
+
+Task #242:
+- `GET /api/books` implemented and returns `200` without `q` (default list behavior).
+- `q` search implemented across `title`, `description`, and `author` via repository SQL.
+- SQL is in `backend/repositories/books.py` and uses `%s` placeholders.
+- Database failure path returns `500` JSON error (`database_unavailable`) without stack trace in response body.
+- `STATUS.md` documents endpoint semantics and curl examples.
+
+Task #243:
+- Supported filters implemented: `genre`, `age_min`, `age_max`, `subject`, `spice_level`.
+- Combined filters are applied conjunctively (`AND`) in repository query builder.
+- Invalid values (e.g., non-numeric `age_min`, unsupported `spice_level`) return `400` JSON errors.
+- Filter SQL uses parameterized placeholders; no unsafe interpolation of user inputs.
+- `STATUS.md` contains filter matrix and combined-filter example.
+
+Task #244:
+- `tests/` includes focused API modules: `tests/test_books_api.py`, `tests/test_backend_books_api.py`.
+- Tests run from repo root via single documented command (`python -m unittest tests.test_books_api -v`), and full suite runs with `python -m unittest discover -s tests -v`.
+- Coverage includes search match/no-match, per-filter behavior, combined filters, and invalid parameter handling.
+- Integration tests provision and tear down temporary MySQL schema automatically.
+- `STATUS.md` documents how to run tests and required environment variables.
+
+## Bugs Filed
+
+- None.
+
+## Integration / Regression Check
+
+- The backend structure, endpoint implementation, repository layer, and tests operate cohesively.
+- No functional regressions were observed in existing crawler/database test areas.
+
+## Overall Verdict
+
+CLEAN

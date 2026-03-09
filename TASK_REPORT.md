@@ -1,39 +1,63 @@
-# Task Report: 148
+# Task Report: 201
 
 ## Summary
 
-Migrated database setup from PostgreSQL tooling to MySQL/MariaDB tooling,
-implemented numbered migrations, and updated schema/tests/docs accordingly.
+Validated MySQL setup end-to-end in the current environment by adding an
+explicit post-setup validation stage and coverage for both unit and integration
+paths.
 
 ## Deliverables
 
-1. `db/setup_database.py`
-   - Uses `mysql`/`mysqladmin` instead of `psql`/`createdb`.
-   - Reads `DEV_MYSQL_HOST`, `DEV_MYSQL_PORT`, `DEV_MYSQL_USER`,
-     `DEV_MYSQL_PASSWORD`, `DEV_MYSQL_DATABASE` (or CLI overrides).
-   - Verifies required tools and server reachability.
-   - Creates database with `utf8mb4` + `utf8mb4_unicode_ci`.
-   - Applies `db/migrations/*.sql` in order, with schema fallback.
-2. `db/migrations/001_init.sql`
-   - MySQL-compatible schema for all project tables, indexes, and constraints.
-3. `db/schema.sql`
-   - Synced MySQL schema snapshot.
-4. `tests/test_database_setup.py`
-   - Updated for MySQL command construction and migration workflow.
-5. `docs/database-schema.md`
-   - Updated engine and operational documentation to MySQL.
-6. `STATUS.md`
-   - Updated with implementation and blocker details for this run.
+1. Updated `db/setup_database.py`:
+   - Added required-table constants for setup validation.
+   - Added `run_scalar_query(...)` helper to execute scalar MySQL checks.
+   - Added `validate_setup(...)` to verify:
+     - `SELECT 1` returns `1`.
+     - Active database matches `DEV_MYSQL_DATABASE`.
+     - Required tables (`books`, `authors`, `genres`) exist.
+   - Integrated validation into `setup_database(...)` after schema/migration
+     application.
+   - Updated success message to confirm validation query pass.
 
-## Test Results
+2. Updated `tests/test_database_setup.py`:
+   - Added unit coverage for new scalar-query and validation functions.
+   - Ensured setup success path asserts `validate_setup(...)` is invoked.
+   - Added setup failure test when validation raises an error.
 
-1. `python -m pytest tests/ -q` -> `No module named pytest`
-2. `pytest tests/ -q` -> `command not found`
-3. `python -m unittest discover` -> `NO TESTS RAN`
-4. `python -m unittest discover -s tests -p 'test_*.py'` -> `Ran 16 tests ... OK`
+3. Added `tests/test_mysql_setup_validation.py`:
+   - Integration test (env-gated) that runs setup and validates real MySQL
+     connection/query behavior using `pymysql`.
 
-## Blocked Reason
+## Verification
 
-Live acceptance validation (actual DB create + schema apply on MySQL server)
-could not be completed in this environment because `DEV_MYSQL_*` credentials
-are not present and local default MySQL endpoint is unreachable.
+1. Unit + integration suite (repo tests):
+   - Command: `python -m unittest discover -s tests -p 'test*.py'`
+   - Outcome: `Ran 25 tests ... OK`
+
+2. Real setup execution:
+   - Command: `python scripts/setup_database.py`
+   - Outcome: `Database created successfully, schema applied, and validation queries passed.`
+
+3. Direct MySQL acceptance queries:
+   - Command executed with env vars:
+     - `SELECT 1 AS connection_ok;`
+     - `SELECT DATABASE() AS active_database;`
+     - required-table count query on `information_schema.tables`
+   - Outcome:
+     - `connection_ok = 1`
+     - `active_database = dev_find_me_a_book`
+     - `required_tables = 3`
+
+## Acceptance Mapping
+
+1. MySQL connection is successful:
+   - Verified by setup validation queries and direct CLI query `SELECT 1`.
+
+2. Basic queries return expected results:
+   - Verified by active database check and required-table count check.
+
+## Notes
+
+1. This task did not require infrastructure/CI changes.
+2. Existing project behavior was preserved while strengthening setup
+   correctness guarantees.

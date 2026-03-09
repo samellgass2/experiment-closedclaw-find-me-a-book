@@ -30,6 +30,9 @@ class SetupResult:
     message: str
 
 
+REQUIRED_TABLES: tuple[str, ...] = ("books", "authors", "genres")
+
+
 def run_command(
     command: list[str],
     stdin=None,
@@ -127,6 +130,57 @@ def apply_migrations(params: DbConnectionParams, migrations_dir: Path) -> None:
         apply_sql_file(params, migration)
 
 
+def run_scalar_query(params: DbConnectionParams, sql: str) -> str:
+    """Execute a scalar SQL query and return the first output line."""
+    command = [
+        "mysql",
+        *build_client_args(params),
+        "--batch",
+        "--raw",
+        "--skip-column-names",
+        "--execute",
+        sql,
+        params.database,
+    ]
+    result = run_command(command)
+    output = result.stdout.strip()
+    if not output:
+        raise ValueError(f"Validation query returned no rows: {sql}")
+    return output.splitlines()[0].strip()
+
+
+def validate_setup(params: DbConnectionParams) -> None:
+    """Validate DB connection and basic query behavior."""
+    select_one_result = run_scalar_query(params, "SELECT 1;")
+    if select_one_result != "1":
+        raise ValueError(
+            "Validation failed: expected SELECT 1 to return 1, "
+            f"got '{select_one_result}'."
+        )
+
+    active_database = run_scalar_query(params, "SELECT DATABASE();")
+    if active_database != params.database:
+        raise ValueError(
+            "Validation failed: connected database mismatch. "
+            f"Expected '{params.database}', got '{active_database}'."
+        )
+
+    required_table_list = ", ".join(
+        f"'{table_name}'" for table_name in REQUIRED_TABLES
+    )
+    required_table_query = (
+        "SELECT COUNT(*) "
+        "FROM information_schema.tables "
+        "WHERE table_schema = DATABASE() "
+        f"AND table_name IN ({required_table_list});"
+    )
+    matched_required_count = int(run_scalar_query(params, required_table_query))
+    if matched_required_count != len(REQUIRED_TABLES):
+        raise ValueError(
+            "Validation failed: required tables are missing after setup."
+        )
+
+
 def setup_database(
     params: DbConnectionParams,
     schema_path: Path,
@@ -148,6 +202,7 @@ def setup_database(
             apply_migrations(params, migrations_dir)
         else:
             apply_schema(params, schema_path)
+        validate_setup(params)
     except (FileNotFoundError, ValueError) as exc:
         return SetupResult(success=False, message=str(exc))
     except subprocess.CalledProcessError as exc:
@@ -166,7 +221,8 @@ def setup_database(
     return SetupResult(
         success=True,
         message=(
-            "Database created successfully and schema applied without errors."
+            "Database created successfully, schema applied, and "
+            "validation queries passed."
         ),
     )
 

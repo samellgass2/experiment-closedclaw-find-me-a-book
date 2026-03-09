@@ -1,11 +1,14 @@
+import argparse
 import unittest
 from datetime import date
+from unittest.mock import patch
 
 from crawler.goodreads_crawler import (
     BookRecord,
     GoodreadsCrawler,
-    PostgresBookRepository,
+    MySQLBookRepository,
     parse_publication_date,
+    resolve_mysql_config,
 )
 
 
@@ -52,22 +55,22 @@ BOOK_HTML = """
 class FakeCursor:
     def __init__(self):
         self.exec_calls = []
-        self._fetch_values = []
+        self.lastrowid = 0
+        self._author_counter = 0
+        self._genre_counter = 0
 
     def execute(self, sql, params=None):
         self.exec_calls.append((sql, params))
         text = " ".join(sql.lower().split())
-        if "returning id" in text and "insert into books" in text:
-            self._fetch_values.append((101,))
-        elif "returning id" in text and "insert into authors" in text:
-            next_id = 200 + len([v for v in self._fetch_values if v[0] >= 200])
-            self._fetch_values.append((next_id,))
-        elif "returning id" in text and "insert into genres" in text:
-            next_id = 300 + len([v for v in self._fetch_values if v[0] >= 300])
-            self._fetch_values.append((next_id,))
 
-    def fetchone(self):
-        return self._fetch_values.pop(0)
+        if "insert into books" in text:
+            self.lastrowid = 101
+        elif "insert into authors" in text:
+            self._author_counter += 1
+            self.lastrowid = 200 + self._author_counter
+        elif "insert into genres" in text:
+            self._genre_counter += 1
+            self.lastrowid = 300 + self._genre_counter
 
     def __enter__(self):
         return self
@@ -103,15 +106,17 @@ class GoodreadsCrawlerTests(unittest.TestCase):
         self.assertEqual(
             urls,
             [
-                "https://www.goodreads.com/book/show/12345-the-sample-book",
-                "https://www.goodreads.com/book/show/67890-another-book",
+                "https://www.goodreads.com/book/show/12345",
+                "https://www.goodreads.com/book/show/67890",
             ],
         )
 
     def test_book_record_is_parsed_from_json_ld_and_genres(self):
         crawler = GoodreadsCrawler(base_url="https://www.goodreads.com")
         crawler._fetch_html = lambda _: BOOK_HTML
-        record = crawler.fetch_book_record("https://www.goodreads.com/book/show/12345-test")
+        record = crawler.fetch_book_record(
+            "https://www.goodreads.com/book/show/12345-test"
+        )
         self.assertEqual(record.external_source_id, "12345")
         self.assertEqual(record.title, "The Pragmatic Reader")
         self.assertEqual(record.isbn_13, "9781234567890")
@@ -129,7 +134,7 @@ class GoodreadsCrawlerTests(unittest.TestCase):
 class RepositoryTests(unittest.TestCase):
     def test_repository_upsert_commits_and_links_records(self):
         conn = FakeConnection()
-        repo = PostgresBookRepository(conn)
+        repo = MySQLBookRepository(conn)
         record = BookRecord(
             external_source_id="12345",
             title="The Pragmatic Reader",
@@ -150,6 +155,47 @@ class RepositoryTests(unittest.TestCase):
         self.assertTrue(conn.committed)
         self.assertFalse(conn.rolled_back)
         self.assertGreaterEqual(len(conn.cursor_obj.exec_calls), 9)
+
+
+class MySQLConfigTests(unittest.TestCase):
+    def test_resolve_mysql_config_from_environment(self):
+        args = argparse.Namespace(
+            db_host=None,
+            db_port=None,
+            db_user=None,
+            db_password=None,
+            db_name=None,
+        )
+        with patch.dict(
+            "os.environ",
+            {
+                "DEV_MYSQL_HOST": "db.example",
+                "DEV_MYSQL_PORT": "3306",
+                "DEV_MYSQL_USER": "crawler",
+                "DEV_MYSQL_PASSWORD": "secret",
+                "DEV_MYSQL_DATABASE": "find_me_a_book",
+            },
+            clear=False,
+        ):
+            config = resolve_mysql_config(args)
+
+        self.assertEqual(config.host, "db.example")
+        self.assertEqual(config.port, 3306)
+        self.assertEqual(config.user, "crawler")
+        self.assertEqual(config.password, "secret")
+        self.assertEqual(config.database, "find_me_a_book")
+
+    def test_resolve_mysql_config_requires_values(self):
+        args = argparse.Namespace(
+            db_host=None,
+            db_port=None,
+            db_user=None,
+            db_password=None,
+            db_name=None,
+        )
+        with patch.dict("os.environ", {}, clear=True):
+            with self.assertRaises(ValueError):
+                resolve_mysql_config(args)
 
 
 if __name__ == "__main__":

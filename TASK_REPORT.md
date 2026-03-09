@@ -1,63 +1,48 @@
-# Task Report: 201
+# Task Report: 212
 
 ## Summary
 
-Validated MySQL setup end-to-end in the current environment by adding an
-explicit post-setup validation stage and coverage for both unit and integration
-paths.
+Consolidated the search, filters, and results wireframes into one implementation
+overview and updated workflow status completion notes.
 
-## Deliverables
+Updated files:
 
-1. Updated `db/setup_database.py`:
-   - Added required-table constants for setup validation.
-   - Added `run_scalar_query(...)` helper to execute scalar MySQL checks.
-   - Added `validate_setup(...)` to verify:
-     - `SELECT 1` returns `1`.
-     - Active database matches `DEV_MYSQL_DATABASE`.
-     - Required tables (`books`, `authors`, `genres`) exist.
-   - Integrated validation into `setup_database(...)` after schema/migration
-     application.
-   - Updated success message to confirm validation query pass.
+- [docs/ui/wireframes-overview.md](docs/ui/wireframes-overview.md)
+- [STATUS.md](STATUS.md)
 
-2. Updated `tests/test_database_setup.py`:
-   - Added unit coverage for new scalar-query and validation functions.
-   - Ensured setup success path asserts `validate_setup(...)` is invoked.
-   - Added setup failure test when validation raises an error.
+## What was implemented
 
-3. Added `tests/test_mysql_setup_validation.py`:
-   - Integration test (env-gated) that runs setup and validates real MySQL
-     connection/query behavior using `pymysql`.
+1. Added a new overview document linking all three core wireframe docs:
+   - [docs/ui/wireframes-main-search.md](docs/ui/wireframes-main-search.md)
+   - [docs/ui/wireframes-filters-panel.md](docs/ui/wireframes-filters-panel.md)
+   - [docs/ui/wireframes-results-and-items.md](docs/ui/wireframes-results-and-items.md)
+2. Documented an end-to-end user flow from landing on search, to executing
+   query, to applying filters, to reviewing updated results.
+3. Captured key interaction patterns, including:
+   - mobile filter drawer open/stage/apply behavior
+   - desktop and mobile results update behavior after filter changes
+   - responsiveness and load-feel expectations
+4. Added an explicit open UX questions/tradeoffs section for follow-on frontend
+   tasks.
+5. Explicitly stated project-spec alignment that major views (search, filters,
+   results) are complete and ready to guide frontend implementation.
+6. Updated `STATUS.md` with a final workflow note linking to the new overview
+   and marking core discovery wireframes complete.
 
-## Verification
+## Validation
 
-1. Unit + integration suite (repo tests):
-   - Command: `python -m unittest discover -s tests -p 'test*.py'`
-   - Outcome: `Ran 25 tests ... OK`
+Executed test commands per repository guidance:
 
-2. Real setup execution:
-   - Command: `python scripts/setup_database.py`
-   - Outcome: `Database created successfully, schema applied, and validation queries passed.`
+1. `python -m pytest tests/ -q` -> fails in environment (`No module named pytest`)
+2. `python -m unittest discover -s tests -v` -> PASS (`Ran 25 tests`, `OK`)
 
-3. Direct MySQL acceptance queries:
-   - Command executed with env vars:
-     - `SELECT 1 AS connection_ok;`
-     - `SELECT DATABASE() AS active_database;`
-     - required-table count query on `information_schema.tables`
-   - Outcome:
-     - `connection_ok = 1`
-     - `active_database = dev_find_me_a_book`
-     - `required_tables = 3`
+Acceptance checks verified:
 
-## Acceptance Mapping
-
-1. MySQL connection is successful:
-   - Verified by setup validation queries and direct CLI query `SELECT 1`.
-
-2. Basic queries return expected results:
-   - Verified by active database check and required-table count check.
-
-## Notes
-
-1. This task did not require infrastructure/CI changes.
-2. Existing project behavior was preserved while strengthening setup
-   correctness guarantees.
+1. `docs/ui/wireframes-overview.md` exists.
+2. The overview links all three required wireframe documents.
+3. The overview describes end-to-end search -> filter -> results flow with
+   references to specific wireframe elements.
+4. The overview explicitly states major-view coverage and implementation
+   readiness.
+5. Open UX questions/tradeoffs section is included.
+6. `STATUS.md` reflects completion and links the overview.

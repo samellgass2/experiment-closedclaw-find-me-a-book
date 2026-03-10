@@ -5,13 +5,14 @@ FLASK_AVAILABLE = find_spec("flask") is not None
 
 if FLASK_AVAILABLE:
     from backend.app import create_app
-    from backend.config import AppConfig, DatabaseConfig
+    from backend.config import AppConfig, DatabaseConfig, ExternalServiceConfig
 
 
 @unittest.skipUnless(FLASK_AVAILABLE, "Flask is not installed in this environment")
 class FrontendServingTests(unittest.TestCase):
     def setUp(self) -> None:
         config = AppConfig(
+            environment="test",
             debug=False,
             log_level="INFO",
             database=DatabaseConfig(
@@ -20,6 +21,10 @@ class FrontendServingTests(unittest.TestCase):
                 user="dev",
                 password="dev",
                 database="dev_find_me_a_book",
+            ),
+            external_services=ExternalServiceConfig(
+                book_source_base_url="https://www.goodreads.com",
+                book_source_api_key=None,
             ),
         )
         self.client = create_app(config).test_client()

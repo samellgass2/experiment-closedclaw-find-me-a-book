@@ -2416,3 +2416,274 @@ PASS: Workflow #35 goals are met. The branch now provides:
 ### Overall Verdict
 
 `PASS`
+
+## Task 366 - Containerization Baseline (Production-Ready Deployment, Config, and Observability Setup)
+
+Date: 2026-03-10  
+RUN_ID: 641  
+TASK_ID: 366
+
+### Summary
+
+Added a production-focused containerization baseline for the Flask backend:
+
+- Added a root `Dockerfile` that builds the app with:
+  - `python:3.12-slim-bookworm`
+  - system build/runtime packages commonly required by Python web stacks
+  - dependency install via `python -m pip install -r requirements.txt`
+  - unprivileged runtime user (`appuser`)
+  - `EXPOSE 8000`
+  - startup command `python -m backend.app`
+- Added root `docker-compose.example.yml` defining:
+  - `app` service built from local `Dockerfile`
+  - `dev-mysql` MariaDB service reachable at `dev-mysql:3306`
+  - app-to-db environment variable wiring (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`)
+  - host port mapping `8000:8000` for the app
+
+### Runtime Configuration
+
+The containerized backend uses environment variables for database runtime config:
+
+- `DB_HOST`
+- `DB_PORT`
+- `DB_NAME`
+- `DB_USER`
+- `DB_PASSWORD`
+
+These are already plumbed into the app through existing configuration loading in
+`config.py` -> `backend/config.py` -> `backend/app.py`.
+
+### Build and Run
+
+Build image:
+
+```bash
+docker build -t find-me-a-book:latest .
+```
+
+Run app container (example):
+
+```bash
+docker run --rm -p 8000:8000 \
+  -e DB_HOST=dev-mysql \
+  -e DB_PORT=3306 \
+  -e DB_NAME=dev_find_me_a_book \
+  -e DB_USER=devagent \
+  -e DB_PASSWORD=devpassword \
+  find-me-a-book:latest
+```
+
+Run app + database with compose example:
+
+```bash
+docker compose -f docker-compose.example.yml up --build
+```
+
+Adjust runtime values by editing environment variables in
+`docker-compose.example.yml` or passing `-e` vars to `docker run`.
+
+## Task 367 - Environment-specific backend configuration loading
+
+- Added profile-aware backend configuration module in `backend/config.py`.
+- `FLASK_ENV` now selects `development`, `test`, or `production` behavior.
+- Backend app factory (`backend/app.py`) now reads runtime settings from this
+  config layer (database settings, debug/logging, external service keys).
+- Default development behavior remains aligned with existing values
+  (`dev-mysql:3306`, `dev_find_me_a_book`, `devagent`).
+- Added root documentation: `CONFIGURATION.md`.
+
+See [CONFIGURATION.md](CONFIGURATION.md) for supported environment variables,
+default values, and environment-specific examples.
+
+## Task 368 - Health, readiness, and logging instrumentation
+
+Date: 2026-03-10  
+RUN_ID: 646  
+TASK_ID: 368
+
+### Backend Endpoint Contracts
+
+- `GET /health`
+  - Always returns `200` with a compact JSON payload for operational health
+    reporting.
+  - Response fields:
+    - `status`: `ok` when DB probe succeeds, otherwise `degraded`
+    - `service`: backend service identifier
+    - `database.status`: `up` or `down`
+    - `migration_version`: migration version string when discoverable, else
+      `null`
+    - `migration_status`: `available` when migration version is present,
+      otherwise `unknown`
+  - Probe behavior is lightweight and deterministic:
+    - Executes `SELECT 1`
+    - Uses short DB connect/read/write timeouts
+    - Uses metadata queries only (`information_schema`) for migration discovery
+
+- `GET /ready`
+  - Returns `200` only when the app can connect to the configured MySQL
+    database.
+  - Returns `503` when DB connectivity is unavailable.
+  - Intended for container/orchestrator readiness probes.
+
+### Logging Behavior
+
+Flask backend logging is now standardized to structured JSON logs on stdout.
+Each log line includes timestamp, level, logger name, and message. Request logs
+also include:
+
+- `method`
+- `path`
+- `status_code`
+- `duration_ms`
+
+Unhandled exceptions are logged with `exception_type` and stack traces.
+
+### Log Verbosity Controls
+
+Log verbosity is environment-driven and does not require code changes.
+Supported environment variables (precedence order):
+
+1. `BACKEND_LOG_LEVEL`
+2. `LOG_LEVEL`
+3. profile default (`INFO` for development/production, `WARNING` for test)
+
+Examples:
+
+- `BACKEND_LOG_LEVEL=DEBUG`
+- `LOG_LEVEL=ERROR` (used when `BACKEND_LOG_LEVEL` is unset)
+
+### Validation
+
+- Full tests executed:
+  - `. .qa-venv/bin/activate && python -m pytest tests/ -q`
+  - Result: `96 passed`
+
+## Tester Report - Workflow #37 (Production-Ready Deployment, Config, and Observability Setup)
+
+Date: 2026-03-10  
+Branch: `workflow/37/dev`  
+Role: TESTER
+
+### Tests Run And Results
+
+1. `source .qa-venv/bin/activate && python -m pytest tests/ -q`
+   - Result: `96 passed in 11.64s`
+
+### Acceptance Verification
+
+1. Task #366 - Add containerization and base Dockerfile: **PASS**
+   - `Dockerfile` exists at repo root and is production-oriented (Python slim base, system deps, unprivileged runtime user, `EXPOSE 8000`, `CMD ["python", "-m", "backend.app"]`).
+   - DB runtime configuration is environment-driven (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`) and wired through backend config loading.
+   - `docker-compose.example.yml` exists and defines `app` + `dev-mysql` services, with app DB host set to `dev-mysql` and port mapping `8000:8000`.
+   - `STATUS.md` contains build/run instructions and compose reference.
+   - Note: Docker CLI is not available in this test runner, so an actual `docker build` execution could not be performed here.
+
+2. Task #367 - Implement environment-specific configuration loading: **PASS**
+   - `backend/config.py` provides a centralized environment-aware config module with profiles (`development`, `test`, `production`).
+   - Flask app initialization in `backend/app.py` consumes this config layer (no inlined DB literals in app init).
+   - Default behavior with empty env resolves to dev settings (`dev-mysql:3306`, `dev_find_me_a_book`, `devagent`) and expected debug default.
+   - Env overrides (`DB_*`, `FLASK_ENV`, logging/debug vars) change runtime config without code changes.
+   - `CONFIGURATION.md` documents variables, defaults, and dev/prod examples.
+   - `STATUS.md` references the configuration system and docs.
+
+3. Task #368 - Add health, readiness, and logging instrumentation: **PASS**
+   - `/health` returns HTTP 200 with JSON containing overall status, DB status, and migration version (`null` when unavailable/unknown).
+   - `/ready` returns HTTP 200 when DB connectivity succeeds and non-2xx (503) when DB is unavailable.
+   - Health/readiness probes are lightweight (short DB timeouts; simple probe queries).
+   - Logs are structured JSON to stdout with timestamp, level, message; request logs include method/path/status.
+   - Log verbosity is environment-controlled (`BACKEND_LOG_LEVEL`, fallback `LOG_LEVEL`).
+   - `STATUS.md` documents endpoint contracts and logging controls.
+
+### Bugs Filed
+
+- None.
+
+### Integration Verdict
+
+- Containerization, env-based config loading, health/readiness probes, and structured logging work cohesively.
+- No obvious regressions detected from functional checks and full test suite.
+
+**Overall Verdict: CLEAN**
+
+## QA Validation Report - Workflow #37 (Production-Ready Deployment, Config, and Observability Setup)
+
+Date: 2026-03-10
+Branch: `workflow/37/dev`
+Role: QA validation agent (verification-only)
+
+### Commits Reviewed
+
+- `bbeb230` task/370: supervisor safety-commit (Codex omitted git commit)
+- `dd43022` task/368: add health readiness and structured logging
+- `b1102c8` task/367: implement environment-specific backend config loading
+- `34e6ef6` task/366: add dockerfile and compose example for backend
+
+### Commands Run and Results
+
+1. `python --version || python3 --version`
+   - Output: `Python 3.12.13`
+   - Result: PASS
+2. `ls -d venv .venv 2>/dev/null || true`
+   - Output: no local venv directories found
+   - Result: PASS (informational)
+3. `python -m pytest tests/ -q` (before dependency install)
+   - Output: `/usr/local/bin/python: No module named pytest`
+   - Result: FAIL (environment dependency missing)
+4. `pytest tests/ -q`
+   - Output: `/bin/bash: line 1: pytest: command not found`
+   - Result: FAIL (environment dependency missing)
+5. `python -m unittest discover`
+   - Output: `Ran 0 tests ... NO TESTS RAN`
+   - Result: SKIPPED (no auto-discovered unittest tests from repo root)
+6. `python -m pip install -r requirements.txt`
+   - Output: installed Flask/pytest dependencies successfully
+   - Result: PASS
+7. `python -m pytest tests/ -q`
+   - Output: `96 passed in 6.25s`
+   - Result: PASS
+8. `docker --version`
+   - Output: `/bin/bash: line 1: docker: command not found`
+   - Result: SKIPPED (Docker runtime unavailable in this QA runner)
+9. Runtime probe (Flask test client): `/health` and `/ready` using default config
+   - Output: `/health -> 200` with DB + migration fields; `/ready -> 200` (DB reachable in runner)
+   - Result: PASS
+10. Runtime probe (Flask test client): `/ready` with invalid DB host
+    - Output: `/ready -> 503` with `{"status":"not_ready","database":"down"}`
+    - Result: PASS
+11. Runtime config probe: `load_app_config({...})`
+    - Output: `LOG_LEVEL` fallback resolves (`ERROR`), `BACKEND_LOG_LEVEL` precedence resolves (`DEBUG`)
+    - Result: PASS
+
+### Per-Task Acceptance Verdict
+
+1. Task #366 - Add containerization and base Dockerfile: PASS
+   - `Dockerfile` exists at repo root, starts app with `python -m backend.app`, exposes container port `8000`.
+   - DB vars (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`) are env-driven and consumed by backend config loader.
+   - `docker-compose.example.yml` exists with `app` + `dev-mysql`, DB host set to `dev-mysql`, and host mapping `8000:8000`.
+   - Minimum startup env vars are defined for app service.
+   - `STATUS.md` includes container build/run usage and compose reference.
+   - Limitation: `docker build` execution could not be run in this environment because Docker CLI is unavailable.
+
+2. Task #367 - Implement environment-specific configuration loading: PASS
+   - Central config module exists at `backend/config.py` with profile-aware loading.
+   - Flask app initialization uses this module (`load_app_config`) and applies runtime values.
+   - Default config preserves dev DB behavior (`dev-mysql:3306`, `dev_find_me_a_book`, `devagent`) with documented debug/log defaults.
+   - Environment overrides (`DB_*`, `FLASK_ENV`, `BACKEND_LOG_LEVEL`/`LOG_LEVEL`) alter behavior without code changes.
+   - `CONFIGURATION.md` documents supported variables, defaults, and dev/prod examples.
+   - `STATUS.md` references the configuration system and docs.
+
+3. Task #368 - Add health, readiness, and logging instrumentation: PASS
+   - `/health` returns HTTP 200 and includes overall status, DB status, and migration version (`null`/unknown when unavailable).
+   - `/ready` returns HTTP 200 with DB available and 503 when DB unavailable.
+   - Health/readiness probe logic uses lightweight connect + `SELECT 1` + metadata checks with short timeouts.
+   - Logs are emitted to stdout in structured JSON with timestamp/level/message; request logs include method/path/status.
+   - Log verbosity is environment-driven via `BACKEND_LOG_LEVEL` with documented fallback to `LOG_LEVEL`.
+   - `STATUS.md` documents endpoint contracts and logging controls.
+
+### Workflow Goal Verdict
+
+Production-readiness goals are met for deployment scaffolding, environment-specific config, and baseline observability. The service is containerized, configurable by environment variables, and instrumented with health/readiness/logging suitable for operational monitoring and debugging.
+
+### Overall Verdict
+
+PASS

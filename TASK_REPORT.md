@@ -1,75 +1,70 @@
-# TASK REPORT
+# Task Report - TASK_ID=368 RUN_ID=646
 
-## Task
-- TASK_ID: 347
-- RUN_ID: 630
-- Title: Introduce centralized configuration module
+## Scope
+Add production-ready health/readiness endpoints and structured logging
+instrumentation for the Flask backend.
 
-## Summary of Work
-- Added root-level `config.py` as the centralized runtime configuration module.
-- Implemented typed settings dataclasses and loaders for:
-  - Database: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
-  - Book source: `BOOK_SOURCE_BASE_URL`, `BOOK_SOURCE_API_KEY`
-  - Crawler: `CRAWLER_RATE_LIMIT_PER_MIN`
-- Added sensible local defaults aligned to this dev environment:
-  - `DB_HOST=dev-mysql`, `DB_PORT=3306`, `DB_NAME=dev_find_me_a_book`, `DB_USER=devagent`, `DB_PASSWORD=''`
-  - `BOOK_SOURCE_BASE_URL=https://www.goodreads.com`, `BOOK_SOURCE_API_KEY=None`, `CRAWLER_RATE_LIMIT_PER_MIN=60`
-- Preserved compatibility by allowing `DEV_MYSQL_*` as fallback inputs behind `DB_*`.
-- Refactored modules to consume centralized config instead of direct env access/hardcoded runtime values:
-  - `backend/config.py`
-  - `crawler/goodreads_crawler.py`
-  - `db/setup_database.py`
-  - `scripts/benchmark_search_performance.py`
-- Added `tests/test_root_config.py` to verify root config importability and env/default behavior.
-- Updated `STATUS.md` with Task 347 documentation, env variable matrix/defaults, and dev-mysql/dev DB relationship guidance.
+## Changes Implemented
+- Enhanced `backend/app.py` with robust health probing:
+  - Added DB connectivity probe (`SELECT 1`) using existing DB config.
+  - Added migration-version discovery from common metadata tables when present:
+    - `alembic_version.version_num`
+    - `schema_migrations.version_num` or `schema_migrations.version`
+  - Added explicit fallback behavior when migration metadata is unavailable:
+    `migration_version: null` and `migration_status: "unknown"`.
+- Upgraded `/health` contract:
+  - Returns HTTP `200` with JSON containing:
+    - overall `status`
+    - `database.status`
+    - `migration_version`
+    - `migration_status`
+- Added `/ready` endpoint for orchestrators:
+  - Returns HTTP `200` only when DB is reachable.
+  - Returns HTTP `503` when DB is unavailable.
+- Added structured stdout logging:
+  - Introduced JSON log formatter with timestamp, level, logger, message.
+  - Added request lifecycle logging (`method`, `path`, `status_code`,
+    `duration_ms`).
+  - Added unhandled exception logging with stack traces and exception type.
+- Updated backend log-level configuration in `backend/config.py`:
+  - `BACKEND_LOG_LEVEL` remains primary control.
+  - Added `LOG_LEVEL` as fallback for environment-level verbosity control.
 
-## Acceptance Coverage
-1. `config.py` exists at repo root and is importable (`import config`).
-2. `config.py` defines required DB/book-source/crawler settings via env variables with documented defaults.
-3. No production credentials or production-only hostnames were introduced; defaults are local/dev-safe.
-4. Existing runtime code previously hardcoding/reading DB or source config directly now imports centralized config.
-5. `STATUS.md` documents the configuration module, supported variables/defaults, and how they map to `dev-mysql` + `dev_find_me_a_book`.
+## Tests Added/Updated
+- Updated `tests/test_backend_books_api.py`:
+  - `/health` payload includes DB + migration fields.
+  - `/ready` returns `200` when DB probe passes.
+  - `/ready` returns `503` when DB probe fails.
+  - Request log records include method/path/status fields.
+- Updated `tests/test_backend_config.py`:
+  - `LOG_LEVEL` fallback behavior.
+  - precedence of `BACKEND_LOG_LEVEL` over `LOG_LEVEL`.
 
-## Validation / Test Execution
-Commands run:
-1. `python -m pytest tests/ -q`
-2. `python -m unittest discover -s tests -p 'test*.py'`
+## Validation Performed
+- Ran full test suite:
+  - `. .qa-venv/bin/activate && python -m pytest tests/ -q`
+  - Result: `96 passed in 8.57s`
 
-Observed results:
-- `python -m pytest tests/ -q`: FAIL in environment (`No module named pytest`)
-- `python -m unittest discover -s tests -p 'test*.py'`: PASS (`Ran 84 tests`, `OK`, `skipped=23`)
+## Acceptance Criteria Mapping
+1. `/health` returns `200` and includes overall status, DB status, and
+   migration version/null:
+   PASS.
+2. `/ready` returns `200` only when DB connectivity succeeds and non-2xx
+   otherwise:
+   PASS (`503` on DB probe failure).
+3. Health/readiness checks are lightweight and deterministic:
+   PASS (single lightweight DB ping + metadata reads with short timeouts).
+4. Logs emitted to stdout with timestamps/levels and request method/path/status:
+   PASS (JSON formatter + `before_request`/`after_request` hooks).
+5. Env variable controls log verbosity without code changes:
+   PASS (`BACKEND_LOG_LEVEL` with `LOG_LEVEL` fallback).
+6. Status documentation updated for endpoint and logging contracts:
+   PASS (`STATUS.md` task section added).
 
 ## Files Changed
-- `config.py`
+- `backend/app.py`
 - `backend/config.py`
-- `crawler/goodreads_crawler.py`
-- `db/setup_database.py`
-- `scripts/benchmark_search_performance.py`
-- `tests/test_database_setup.py`
-- `tests/test_goodreads_crawler.py`
-- `tests/test_root_config.py`
+- `tests/test_backend_books_api.py`
+- `tests/test_backend_config.py`
 - `STATUS.md`
 - `TASK_REPORT.md`
-
-## Workflow 35 Follow-up (Bug: frontend entrypoint on :8000)
-- Updated backend routing so `/` serves `frontend/index.html`.
-- Added `/health` for backend health JSON previously returned by `/`.
-- Added static asset route support from `frontend/` so app files load at root origin.
-- Added focused tests in `tests/test_frontend_serving.py` for:
-  - `/` returning HTML with `#search-input`
-  - `/api/books.js` frontend module availability
-- Ran browser acceptance with Playwright Chromium against `http://localhost:8000`:
-  - Verified `#search-input`, `#filters-form`, and Search button render.
-
-### Workflow 35 Validation
-Commands run:
-1. `python -m pytest tests/ -q`
-2. `python -m pytest tests/test_performance_security_smoke.py::SearchPerformanceSmokeTests::test_representative_filter_queries_stay_within_p95_budget -q`
-3. `python -m unittest discover -s tests -p 'test*.py'`
-
-Observed results:
-- Full pytest run: 1 failing test unrelated to this routing bug:
-  - `tests/test_performance_security_smoke.py::SearchPerformanceSmokeTests::test_representative_filter_queries_stay_within_p95_budget`
-  - Failure reason: p95 latency budget exceeded for repository query scenario.
-- Targeted rerun of failing performance test: still failing with the same p95 budget assertion.
-- `unittest` discovery run: PASS.

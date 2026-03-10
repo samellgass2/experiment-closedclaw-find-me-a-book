@@ -2357,3 +2357,62 @@ Task #347: Introduce centralized configuration module
 ### Overall Verdict
 
 `CLEAN`
+
+## QA Validation Report - Workflow #35 (Environment, Configuration, and Dependency Setup)
+
+Date: 2026-03-10
+Branch: `workflow/35/dev`
+Role: QA validation agent (certification only, no code changes)
+
+### Commits Reviewed (`main..HEAD`)
+
+- `6be46c2` bugfix: no interactive frontend at localhost:8000
+- `5a57fc0` task/354: supervisor safety-commit (Codex omitted git commit)
+- `51c61df` task/347: centralize runtime configuration in root config module
+- `37ac4a3` task/346: add task report for dependency alignment
+- `f6b176a` task/346: align python dependencies and install docs
+
+### Commands Run and Results
+
+1. `python --version || python3 --version`
+- Result: PASS
+- Output: `Python 3.12.13`
+
+2. `ls -d venv/ .venv/ 2>/dev/null || true`
+- Result: PASS
+- Output: no existing `venv/` or `.venv/` found
+
+3. `python -m venv .qa-venv && . .qa-venv/bin/activate && python -m pip install --upgrade pip && python -m pip install -r requirements.txt`
+- Result: PASS
+- Output summary: pip upgraded to `26.0.1`; requirements install succeeded with no resolver errors. Installed packages include `flask-3.1.3`, `pymysql-1.1.2`, `requests-2.32.5`, `beautifulsoup4-4.14.3`, `pytest-9.0.2`.
+
+4. `. .qa-venv/bin/activate && python -m pytest tests/ -q`
+- Result: PASS
+- Output: `86 passed in 15.17s`
+
+### Acceptance Verdicts
+
+Task: Align Python dependencies and requirements
+1. PASS: Top-level `requirements.txt` exists and includes `flask`, `pymysql`, `requests`, `beautifulsoup4`, and `pytest`.
+2. PASS: Third-party modules imported in repo Python code are covered (`flask`, `pymysql`), and required crawler/test packages are present as specified.
+3. PASS: Clean-environment install succeeded (`pip install -r requirements.txt` in fresh `.qa-venv`).
+4. PASS: Setup docs reference `pip install -r requirements.txt` as primary install step (`README.md`).
+5. PASS: `STATUS.md` includes Task #346 entry documenting `requirements.txt` and install instructions.
+
+Task: Introduce centralized configuration module
+1. PASS: Root `config.py` exists and is importable (`import config` path from repo root).
+2. PASS: `config.py` defines `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `BOOK_SOURCE_BASE_URL`, `BOOK_SOURCE_API_KEY`, `CRAWLER_RATE_LIMIT_PER_MIN`, sourced from env vars with defaults.
+3. PASS: No production credentials, API keys, or production-only DB hostnames hard-coded in runtime code; defaults are local/dev-safe.
+4. PASS: Prior hard-coded runtime config usage was centralized to root config in `backend/config.py`, `crawler/goodreads_crawler.py`, `db/setup_database.py`, and `scripts/benchmark_search_performance.py`.
+5. PASS: `STATUS.md` Task #347 entry documents the config module, supported env vars/defaults, and dev-mysql/book-source configuration guidance.
+
+### Workflow Goal Verification
+
+PASS: Workflow #35 goals are met. The branch now provides:
+- reproducible Python environment bootstrap via `requirements.txt`,
+- centralized runtime configuration via root `config.py`,
+- canonical Python test command documented in `TESTING_STRATEGY.md` (`python -m pytest tests/ -q`) and validated by execution.
+
+### Overall Verdict
+
+`PASS`

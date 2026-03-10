@@ -70,9 +70,52 @@ body {
   margin-bottom: 0.85rem;
 }
 
+.filters-form {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.filter-group:last-child {
+  margin-bottom: 0;
+}
+
+.filter-group legend {
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+}
+
+.filter-group fieldset,
+fieldset.filter-group {
+  border: 1px solid var(--border);
+  border-radius: 0.35rem;
+  padding: 0.5rem 0.65rem 0.65rem;
+}
+
 .filter-row {
   grid-template-columns: 1fr 1fr;
   gap: 0.5rem;
+}
+
+.checkbox-group,
+.radio-group {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.checkbox-option,
+.radio-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.checkbox-option input,
+.radio-option input {
+  width: auto;
+  margin: 0;
 }
 
 label {
@@ -144,6 +187,11 @@ button {
 
 .result-author {
   font-weight: 600;
+}
+
+.result-meta,
+.result-subjects {
+  font-size: 0.9rem;
 }
 
 .result-snippet {

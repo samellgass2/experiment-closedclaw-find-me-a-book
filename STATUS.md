@@ -1,3 +1,42 @@
+# Status Update: Task 265
+
+## Frontend Search, Filter UI, and API Integration
+
+- Replaced placeholder filter controls in `frontend/index.html` with active,
+  labeled, keyboard-accessible inputs in the existing filters sidebar:
+  - `Book Type`: select with `all`, `fiction`, `nonfiction`
+  - `Age Appropriateness`: select with `all`, `kids`, `teen`, `adult`
+  - `Subject Matter`: checkbox set with `fantasy`, `sci-fi`, `historical`
+  - `Spice Level`: radio group with `any`, `low`, `medium`, `high`
+- Added centralized frontend search/filter state in `frontend/main.js` via one
+  object that can be serialized into API query parameters:
+  - `searchParams = { query, fictionType, ageRating, subjects[], spiceLevel }`
+- Implemented combined filtering behavior against mock data so text query and
+  all filter controls compose predictably using logical `AND` across:
+  - free-text query (`title`, `author`, `genre`, `snippet`)
+  - fiction type equality
+  - age rating equality
+  - spice tier equality
+  - subject matter inclusion (all checked subjects must be present)
+- Updated API integration path so current `searchParams` are transformed into
+  request query params (`q`, `age_rating`, `spice_level`, `subject`,
+  `fiction_type`) before fetching `/api/books`; client-side filter application
+  is still applied for consistency with mock fallback behavior.
+- Expanded mock data metadata in `frontend/main.js` to include:
+  - `fictionType`, `ageRating`, `subjects[]`, and `spiceLevel` for each title,
+    including both fiction and non-fiction records.
+- Added supporting styles in `frontend/styles.css` for fieldsets, checkbox and
+  radio layouts, and result metadata so controls remain usable and non-overlap
+  at desktop/tablet/mobile breakpoints.
+
+### Current Frontend Filter Assumptions
+
+- `fictionType`: one of `all`, `fiction`, `nonfiction`.
+- `ageRating`: one of `all`, `kids`, `teen`, `adult`.
+- `subjects`: zero or more of `fantasy`, `sci-fi`, `historical`.
+- `spiceLevel`: one of `any`, `low`, `medium`, `high`.
+- Subject filtering currently uses an all-selected-subjects-must-match rule.
+
 # Status Update: Task 264
 
 ## Frontend Search Input and Basic Results List

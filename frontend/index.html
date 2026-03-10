@@ -16,28 +16,100 @@
       <main class="app-main" aria-label="Book discovery layout">
         <aside class="filters-panel" aria-label="Filter controls">
           <h2>Filters</h2>
-          <div class="filter-group">
-            <label for="filter-genre">Genre</label>
-            <select id="filter-genre" disabled>
-              <option>Coming soon</option>
-            </select>
-          </div>
-          <div class="filter-group filter-row">
-            <div>
-              <label for="filter-age-min">Age Min</label>
-              <input id="filter-age-min" type="number" min="0" max="120" disabled />
+          <form id="filters-form" class="filters-form" aria-label="Book filters">
+            <div class="filter-group">
+              <label for="filter-fiction-type">Book Type</label>
+              <select id="filter-fiction-type" name="fiction_type">
+                <option value="all">All books</option>
+                <option value="fiction">Fiction</option>
+                <option value="nonfiction">Non-fiction</option>
+              </select>
             </div>
-            <div>
-              <label for="filter-age-max">Age Max</label>
-              <input id="filter-age-max" type="number" min="0" max="120" disabled />
+            <div class="filter-group">
+              <label for="filter-age-rating">Age Appropriateness</label>
+              <select id="filter-age-rating" name="age_rating">
+                <option value="all">All ages</option>
+                <option value="kids">Kids (8-12)</option>
+                <option value="teen">Teen (13-17)</option>
+                <option value="adult">Adult (18+)</option>
+              </select>
             </div>
-          </div>
-          <div class="filter-group">
-            <label for="filter-spice">Spice Level</label>
-            <select id="filter-spice" disabled>
-              <option>Coming soon</option>
-            </select>
-          </div>
+            <fieldset class="filter-group">
+              <legend>Subject Matter</legend>
+              <div class="checkbox-group" role="group" aria-label="Subject matter">
+                <label class="checkbox-option" for="filter-subject-fantasy">
+                  <input
+                    id="filter-subject-fantasy"
+                    type="checkbox"
+                    name="subject"
+                    value="fantasy"
+                  />
+                  Fantasy
+                </label>
+                <label class="checkbox-option" for="filter-subject-scifi">
+                  <input
+                    id="filter-subject-scifi"
+                    type="checkbox"
+                    name="subject"
+                    value="sci-fi"
+                  />
+                  Sci-fi
+                </label>
+                <label class="checkbox-option" for="filter-subject-historical">
+                  <input
+                    id="filter-subject-historical"
+                    type="checkbox"
+                    name="subject"
+                    value="historical"
+                  />
+                  Historical
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="filter-group">
+              <legend>Spice Level</legend>
+              <div class="radio-group" role="radiogroup" aria-label="Spice level">
+                <label class="radio-option" for="filter-spice-any">
+                  <input
+                    id="filter-spice-any"
+                    type="radio"
+                    name="spice_level"
+                    value="any"
+                    checked
+                  />
+                  Any
+                </label>
+                <label class="radio-option" for="filter-spice-low">
+                  <input
+                    id="filter-spice-low"
+                    type="radio"
+                    name="spice_level"
+                    value="low"
+                  />
+                  Low
+                </label>
+                <label class="radio-option" for="filter-spice-medium">
+                  <input
+                    id="filter-spice-medium"
+                    type="radio"
+                    name="spice_level"
+                    value="medium"
+                  />
+                  Medium
+                </label>
+                <label class="radio-option" for="filter-spice-high">
+                  <input
+                    id="filter-spice-high"
+                    type="radio"
+                    name="spice_level"
+                    value="high"
+                  />
+                  High
+                </label>
+              </div>
+            </fieldset>
+          </form>
         </aside>
 
         <section class="results-panel" aria-label="Search and results">
@@ -52,7 +124,6 @@
             />
             <button type="submit">Search</button>
           </form>
-
           <section class="results-region" aria-live="polite">
             <h2>Results</h2>
             <p id="results-status" class="results-status">

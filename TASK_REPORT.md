@@ -1,65 +1,68 @@
 # TASK REPORT
 
 ## Task
-- TASK_ID: 304
-- RUN_ID: 534
-- Title: Add basic performance and security smoke tests
+- TASK_ID: 334
+- RUN_ID: 574
+- Title: Define v1 taxonomy and config structures
 
 ## Summary of Work
-- Added new smoke test module:
-  - `tests/test_performance_security_smoke.py`
-- Implemented automated performance smoke coverage:
-  - `SearchPerformanceSmokeTests` creates an isolated MySQL schema,
-    applies `db/migrations/*.sql`, seeds 1200 representative rows, and runs
-    representative filter/search scenarios through `BookRepository.search(...)`.
-  - Tests assert p95 latency budgets per scenario.
-- Implemented automated security smoke coverage:
-  - verifies untrusted filter/query values do not appear in SQL text,
-  - verifies placeholder/parameter parity (`%s` count == params count),
-  - verifies execution path uses `execute(sql, params)` with tuple params,
-  - adds AST guard that fails if `_build_books_query` interpolates user-input
-    variables directly into SQL fragments.
-- Added config hygiene smoke coverage:
-  - scans testing strategy and example config artifacts for committed concrete
-    `DEV_MYSQL_PASSWORD` values.
-- Updated `TESTING_STRATEGY.md` with explicit prerequisites and runnable
-  commands for performance/security smoke checks.
-- Updated `STATUS.md` with current performance/security coverage and limitations.
+- Added a new pure-Python taxonomy configuration module:
+  - `crawler/taxonomy_config.py`
+- Implemented fixed, immutable v1 taxonomy dimensions with typed dataclasses:
+  - genres (`TaxonomyEntry`)
+  - plot tags (`TaxonomyEntry`)
+  - character dynamics (`TaxonomyEntry`)
+  - age bands (`AgeBandEntry`)
+  - spice levels (`SpiceLevelEntry`)
+- Added canonical identifiers and labels for every entry.
+- Included helper metadata fields (`synonyms`, and Open Library subject hints
+  where relevant for normalization).
+- Defined spice levels as an ordered 1-5 scale and added
+  `get_spice_level_by_rank(level)`.
+- Added accessors per taxonomy dimension so downstream code can consume
+  canonical data without coupling to internal constants.
+- Updated `STATUS.md` with a Task 334 entry describing file path, dimensions,
+  and downstream usage guidance.
 
 ## Acceptance Coverage
-1. At least one automated performance test/script with thresholds:
-   - `tests/test_performance_security_smoke.py::SearchPerformanceSmokeTests`
-     enforces p95 budgets.
-   - Existing `scripts/benchmark_search_performance.py` remains budget-gated.
-2. Security checks for parameterized query paths and regression guard:
-   - `RepositorySecuritySmokeTests` validates parameterized SQL behavior and
-     includes a static guard that fails on raw user-input interpolation.
-3. Commands/prereqs documented:
-   - `TESTING_STRATEGY.md` includes environment exports and concrete commands.
-4. Documented commands complete successfully:
-   - ran smoke tests and benchmark command successfully in this run.
-5. Status updated:
-   - `STATUS.md` now includes Task 304 summary and limitations.
+1. New module exists and defines all required v1 dimensions:
+   - `crawler/taxonomy_config.py`
+2. Each entry includes stable `identifier` + human-readable `label`:
+   - enforced across all taxonomy entries.
+   - spice dimension represented with numeric `level` 1..5.
+3. Accessor coverage per dimension:
+   - `get_all_genres()`
+   - `get_all_plot_tags()`
+   - `get_all_character_dynamics()`
+   - `get_age_bands()`
+   - `get_spice_levels()`
+   - plus id/rank helpers.
+4. Module is static and pure-Python:
+   - no network/database/file I/O in taxonomy module.
+5. Import/compile validation completed:
+   - `python -m compileall crawler backend tests db`
+   - ad-hoc import script successfully imported taxonomy accessors.
+6. Status document updated:
+   - `STATUS.md` now contains Task 334 section with usage guidance.
 
 ## Validation / Test Execution
 Commands run:
-1. `python -m unittest tests.test_performance_security_smoke -v`
-2. `python scripts/benchmark_search_performance.py --seed-size 1200 --warmup 2 --iterations 8 --budget-ms 400`
-3. `python -m unittest discover -s tests -p 'test*.py'`
-
-Environment used:
-- `DEV_MYSQL_HOST=dev-mysql`
-- `DEV_MYSQL_PORT=3306`
-- `DEV_MYSQL_USER=devagent`
-- `DEV_MYSQL_PASSWORD=<provided in task env>`
+1. `python --version`
+2. `python -m compileall crawler backend tests db`
+3. `python -m pytest tests/ -q` (not available: `No module named pytest`)
+4. `python -m unittest discover` (no tests discovered from repo root)
+5. `python -m unittest discover -s tests -p 'test*.py'`
+6. `python - <<'PY' ... import crawler.taxonomy_config ... PY`
 
 Observed results:
-- Smoke suite: `Ran 5 tests ... OK`
-- Benchmark script: all scenarios passed budget (`p95 <= 400ms`)
-- Full unittest discovery: `Ran 75 tests ... OK (skipped=23)`
+- Compileall completed without errors.
+- Full unittest discovery against `tests/` passed:
+  - `Ran 75 tests in 7.581s`
+  - `OK (skipped=23)`
+- Taxonomy import sanity check output:
+  - `v1 16 16 13 4 [1, 2, 3, 4, 5]`
 
 ## Files Changed
-- `tests/test_performance_security_smoke.py` (new)
-- `TESTING_STRATEGY.md` (updated)
+- `crawler/taxonomy_config.py` (new)
 - `STATUS.md` (updated)
 - `TASK_REPORT.md` (updated)

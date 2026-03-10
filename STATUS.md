@@ -1,3 +1,35 @@
+# Status Update: Task 334
+
+## Open Library Crawler v1 Taxonomy Config
+
+- Added a new static taxonomy module at `crawler/taxonomy_config.py`.
+- The module defines immutable, in-code v1 taxonomy dimensions for:
+  - genres,
+  - plot tags,
+  - character dynamics,
+  - age bands,
+  - spice levels.
+- Every entry includes a stable `identifier` and human-readable `label`.
+- Spice levels are represented as an ordered canonical scale from 1 to 5
+  via `SpiceLevelEntry.level` and `get_spice_level_by_rank(...)`.
+- Helper metadata is included for downstream normalization where available,
+  including `synonyms` and Open Library subject hints.
+
+### Downstream Usage Guidance
+
+- Normalization logic should import accessors from
+  `crawler.taxonomy_config` rather than reading internal constants.
+- Use:
+  - `get_all_genres()`
+  - `get_all_plot_tags()`
+  - `get_all_character_dynamics()`
+  - `get_age_bands()`
+  - `get_spice_levels()`
+  - `get_taxonomy_version()`
+- Treat returned entries as read-only canonical values for taxonomy v1.
+  The module is pure-Python static configuration and performs no network or
+  database I/O.
+
 # Tester Report: Workflow #29 (End-to-End Testing, Bug Fixes, and QA Stabilization)
 
 Date: 2026-03-10

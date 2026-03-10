@@ -57,6 +57,16 @@ python -m pytest tests/test_integration_filtering.py -q
 python -m unittest tests.test_integration_filtering
 ```
 
+Performance + security smoke run:
+```bash
+export DEV_MYSQL_HOST=dev-mysql
+export DEV_MYSQL_PORT=3306
+export DEV_MYSQL_USER=devagent
+export DEV_MYSQL_PASSWORD=...
+python -m unittest tests.test_performance_security_smoke -v
+python scripts/benchmark_search_performance.py --seed-size 1200 --warmup 2 --iterations 8 --budget-ms 400
+```
+
 ## Test Directory Conventions
 - Keep all tests under `tests/`.
 - Naming:
@@ -136,17 +146,29 @@ Planned scope (next phase):
 ## Performance and Security Smoke Checks
 Minimum recurring smoke checks (CI or scheduled local run):
 - Performance:
-  - Execute `scripts/benchmark_search_performance.py` against fixture data and
-    compare median latency against a pinned baseline.
-  - Run representative `EXPLAIN` checks for high-cardinality searches to verify
-    usage of `ftx_books_title_description` and supporting indexes.
+  - Run `python -m unittest tests.test_performance_security_smoke -v`.
+    - `SearchPerformanceSmokeTests` creates an isolated MySQL schema, seeds
+      1200 books, and runs representative query/filter scenarios.
+    - Each scenario asserts a p95 wall-clock budget:
+      - `query-genre-subject-spice`: `<= 450ms`
+      - `query-age-rating-character`: `<= 450ms`
+      - `browse-filter-only`: `<= 300ms`
+  - Run `python scripts/benchmark_search_performance.py --seed-size 1200 --warmup 2 --iterations 8 --budget-ms 400`.
+    - Validates p95 latency with explicit budget gating.
+    - Emits index usage from `EXPLAIN FORMAT=JSON` for trend tracking.
 - Security:
-  - SQL injection smoke: submit payloads with quotes/operators in `q`, `genre`,
-    and list filters; verify no SQL errors and no expanded result leakage.
-  - Input hardening smoke: overlong query/filter values and invalid age ranges
-    must return controlled `400` responses.
-  - Crawler safety smoke: blocked responses (HTTP 403/429, captcha content)
-    must fail closed with explicit crawler errors and no partial DB writes.
+  - `RepositorySecuritySmokeTests` (in
+    `tests/test_performance_security_smoke.py`) verifies:
+    - untrusted values are not interpolated into SQL text,
+    - SQL placeholder count matches supplied params,
+    - query execution sends a parameter tuple to the DB driver,
+    - AST-based static guard fails if `_build_books_query` interpolates
+      user-input variables via f-strings.
+  - `ConfigSecretSmokeTests` scans strategy/example config files to fail if
+    concrete `DEV_MYSQL_PASSWORD` values are committed.
+  - Existing API validation and crawler-fail-closed checks remain covered by:
+    `tests/test_backend_books_api.py` and
+    `tests/test_crawler_validation_smoke.py`.
 
 ## Suggested Test Matrix per Change Type
 - Query/filter logic changes (`backend/repositories/books.py`):

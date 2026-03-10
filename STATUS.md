@@ -1,3 +1,48 @@
+# Status Update: Task 304
+
+## Performance and Security Smoke Tests
+
+- Added new smoke-test module:
+  `tests/test_performance_security_smoke.py`.
+- Added automated performance smoke coverage:
+  - `SearchPerformanceSmokeTests` provisions an isolated MySQL schema,
+    applies `db/migrations/*.sql`, seeds 1200 deterministic rows, and runs
+    representative `BookRepository.search(...)` filter scenarios.
+  - Enforces p95 latency budgets:
+    - query + genre + subject + spice filter path: `<= 450ms`
+    - query + age rating + character dynamics path: `<= 450ms`
+    - browse/filter-only path: `<= 300ms`
+- Added automated security smoke coverage:
+  - verifies untrusted query/filter values are parameterized (kept out of SQL
+    text and passed as `%s` params),
+  - verifies `_query_books` calls driver `execute(sql, params)` with a tuple,
+  - AST guard fails if `_build_books_query` interpolates user-input variables
+    directly into SQL fragments via f-strings.
+- Added configuration hygiene smoke coverage:
+  - `ConfigSecretSmokeTests` scans strategy/example files and fails if a
+    concrete `DEV_MYSQL_PASSWORD` value is committed.
+
+### How To Run
+
+```bash
+export DEV_MYSQL_HOST=dev-mysql
+export DEV_MYSQL_PORT=3306
+export DEV_MYSQL_USER=devagent
+export DEV_MYSQL_PASSWORD=<password>
+python -m unittest tests.test_performance_security_smoke -v
+python scripts/benchmark_search_performance.py --seed-size 1200 --warmup 2 --iterations 8 --budget-ms 400
+```
+
+### Current Limitations / Risks
+
+- Performance timing uses wall-clock checks in shared dev-runner infrastructure;
+  thresholds are intentionally conservative to reduce false positives.
+- Secret scanning currently targets strategy/example artifacts and not all
+  Python test fixtures, to avoid blocking on benign fake credentials.
+- Static SQL interpolation checks are scoped to `_build_books_query`; future
+  query builder functions should either extend this guard or add equivalent
+  tests.
+
 # Status Update: Task 303
 
 ## Crawler Validation and Smoke Tests

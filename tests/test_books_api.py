@@ -163,6 +163,7 @@ class BooksApiIntegrationTests(unittest.TestCase):
 
         titles = {
             "fantasy_general": make_title("Starlight Friends"),
+            "fantasy_supporting": make_title("Moonlit Bonds"),
             "scifi_teen": make_title("Galactic Academy"),
             "romance_mature": make_title("Midnight Oath"),
             "nonfiction_general": make_title("Quiet Gardens"),
@@ -223,6 +224,14 @@ class BooksApiIntegrationTests(unittest.TestCase):
                     "fantasy_general",
                     titles["fantasy_general"],
                     "A friendship quest beneath a comet.",
+                    "general",
+                    fantasy_author_id,
+                    fantasy_genre_id,
+                ),
+                (
+                    "fantasy_supporting",
+                    titles["fantasy_supporting"],
+                    "A friendship tale in starlight valley.",
                     "general",
                     fantasy_author_id,
                     fantasy_genre_id,
@@ -293,8 +302,16 @@ class BooksApiIntegrationTests(unittest.TestCase):
         payload = response.get_json()
         self.assertIsInstance(payload, list)
         assert isinstance(payload, list)
+        self.assertGreaterEqual(len(payload), 2)
+        self.assertEqual(payload[0]["title"], self.seeded_titles["fantasy_general"])
         titles = self._response_titles(payload)
-        self.assertEqual(titles, {self.seeded_titles["fantasy_general"]})
+        self.assertEqual(
+            titles,
+            {
+                self.seeded_titles["fantasy_general"],
+                self.seeded_titles["fantasy_supporting"],
+            },
+        )
 
     def test_search_q_returns_empty_list_for_no_match(self) -> None:
         response = self.client.get("/api/books?q=zzzz-no-matching-book")
@@ -351,7 +368,7 @@ class BooksApiIntegrationTests(unittest.TestCase):
         response = self.client.get(
             (
                 "/api/books?genre=fantasy"
-                "&subject=friendship"
+                "&subject_matter=friendship"
                 "&spice_level=low"
                 "&age_min=8"
                 "&age_max=12"
@@ -366,6 +383,35 @@ class BooksApiIntegrationTests(unittest.TestCase):
             {self.seeded_titles["fantasy_general"]},
         )
 
+    def test_advanced_filter_combination_and_monotonic_subset(self) -> None:
+        broad = self.client.get("/api/books/search?genre=fantasy&spice_level=low")
+        self.assertEqual(broad.status_code, 200)
+        broad_payload = broad.get_json()
+        assert isinstance(broad_payload, list)
+        broad_titles = self._response_titles(broad_payload)
+        self.assertEqual(
+            broad_titles,
+            {
+                self.seeded_titles["fantasy_general"],
+                self.seeded_titles["fantasy_supporting"],
+            },
+        )
+
+        narrow = self.client.get(
+            (
+                "/api/books/search?genre=fantasy&spice_level=low"
+                "&subject_matter=friendship"
+                "&plot_points=quest"
+                "&character_dynamics=friendship"
+            )
+        )
+        self.assertEqual(narrow.status_code, 200)
+        narrow_payload = narrow.get_json()
+        assert isinstance(narrow_payload, list)
+        narrow_titles = self._response_titles(narrow_payload)
+        self.assertEqual(narrow_titles, {self.seeded_titles["fantasy_general"]})
+        self.assertLessEqual(len(narrow_payload), len(broad_payload))
+
     def test_invalid_age_min_returns_400_json_error(self) -> None:
         response = self.client.get("/api/books?age_min=abc")
 
@@ -375,6 +421,16 @@ class BooksApiIntegrationTests(unittest.TestCase):
         assert isinstance(payload, dict)
         self.assertEqual(payload.get("error"), "invalid_parameter")
         self.assertIn("age_min must be an integer", payload.get("message", ""))
+
+    def test_invalid_age_rating_returns_400_json_error(self) -> None:
+        response = self.client.get("/api/books?age_rating=unknown-level")
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.get_json()
+        self.assertIsInstance(payload, dict)
+        assert isinstance(payload, dict)
+        self.assertEqual(payload.get("error"), "invalid_parameter")
+        self.assertIn("age_rating must be one of", payload.get("message", ""))
 
 
 if __name__ == "__main__":

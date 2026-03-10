@@ -81,10 +81,12 @@ class BookRepositoryFilterQueryTests(unittest.TestCase):
         self.assertIn("b.title LIKE %s", sql)
         self.assertIn("LOWER(b.description) LIKE LOWER(%s)", sql)
         self.assertIn("b.maturity_rating = %s", sql)
-        self.assertEqual(params[0:3], ("%story%", "%story%", "%story%"))
-        self.assertEqual(params[3:5], ("fantasy", "fantasy"))
-        self.assertEqual(params[5], "%friendship%")
-        self.assertEqual(params[6], "general")
+        self.assertEqual(params[0], "story")
+        self.assertEqual(params[1:4], ("%story%", "%story%", "%story%"))
+        self.assertEqual(params[4:7], ("%story%", "%story%", "%story%"))
+        self.assertEqual(params[7:9], ("fantasy", "fantasy"))
+        self.assertEqual(params[9], "%friendship%")
+        self.assertEqual(params[10], "general")
 
     def test_list_books_applies_age_range_filters(self) -> None:
         connection = FakeConnection(rows=[_sample_row()])

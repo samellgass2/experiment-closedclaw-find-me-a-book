@@ -1,3 +1,77 @@
+# Status Update: Task 272
+
+## Advanced Search API Filtering and Relevance Ranking
+
+- Extended the Flask search API in `backend/app.py` while preserving existing
+  `GET /api/books` behavior.
+- Added search route aliases:
+  - `GET /api/books`
+  - `GET /api/books/search`
+  - `GET /search`
+- Added advanced query parameter parsing and validation, and mapped request
+  values into query-layer `BookFilterCriteria` in
+  `backend/repositories/books.py`.
+- Search now supports these parameters:
+  - `q` (free-text query)
+  - `genre`
+  - `age_rating` (`general|kids|teen|ya|mature|adult`)
+  - `subject_matter` (comma-separated and/or repeated values)
+  - `plot_points` (comma-separated and/or repeated values)
+  - `character_dynamics` (comma-separated and/or repeated values)
+  - `spice_level` (`low|medium|high`)
+  - Backward-compatible legacy params retained: `subject`, `age_min`, `age_max`
+- Added graceful failures:
+  - `400` JSON for invalid parameters.
+  - `504` JSON when repository raises query-timeout errors.
+  - `500` JSON for non-timeout repository failures.
+- Implemented explicit relevance ordering in query SQL:
+  - query-title exact and partial matches are weighted highest,
+  - then author/description matches,
+  - then deterministic tie-breakers (`updated_at`, `id`).
+
+### Response Format
+
+Search endpoints return a JSON array ordered by backend relevance logic when
+`q` is provided:
+
+- `id`
+- `title`
+- `author`
+- `summary`
+- `description`
+- `genre`
+- `age_rating`
+- `spice_level`
+- `subject_matter`
+- `plot_points`
+- `character_dynamics`
+
+### Example Request
+
+```bash
+curl -s "http://localhost:8000/api/books/search?q=starlight&genre=Fantasy&age_rating=YA&subject_matter=friendship,magic&plot_points=quest&character_dynamics=found-family&spice_level=low"
+```
+
+### Example Response
+
+```json
+[
+  {
+    "id": 101,
+    "title": "Starlight Friends",
+    "author": "Alex Lantern",
+    "summary": "A friendship quest beneath a comet.",
+    "description": "A friendship quest beneath a comet.",
+    "genre": "Fantasy",
+    "age_rating": "general",
+    "spice_level": "low",
+    "subject_matter": [],
+    "plot_points": [],
+    "character_dynamics": []
+  }
+]
+```
+
 # Status Update: Task 266
 
 ## Frontend Search, Filter UI, and API Integration

@@ -1563,3 +1563,93 @@ Result: `PASS`
 
 ## Overall Verdict
 - `BUGS_FILED`
+
+# QA Validation Report: Workflow #25 (2026-03-10)
+
+## Commits Reviewed
+- `035b407` bugfix: combined books filters strict intersection
+
+Review commands run:
+- `git log --oneline main..HEAD`
+- `git diff main...HEAD --stat`
+
+Observed delta:
+- 1 commit ahead of `main`
+- Files changed vs `main`: `backend/app.py` (`21 insertions`)
+
+## Test Commands Run and Results
+1. `python --version && python3 --version`
+- Result: PASS
+- Output:
+  - `Python 3.12.13`
+  - `Python 3.12.13`
+
+2. `python -m pytest tests/ -q`
+- Result: FAIL (tooling unavailable)
+- Output:
+  - `/usr/local/bin/python: No module named pytest`
+
+3. `pytest tests/ -q`
+- Result: FAIL (tooling unavailable)
+- Output:
+  - `/bin/bash: line 1: pytest: command not found`
+
+4. `python -m unittest discover`
+- Result: FAIL (default discovery pattern/location mismatch)
+- Output:
+  - `Ran 0 tests in 0.000s`
+  - `NO TESTS RAN`
+
+5. `python -m unittest discover -s tests -p 'test*.py'`
+- Result: PASS
+- Output:
+  - `Ran 53 tests in 0.428s`
+  - `OK (skipped=23)`
+
+6. `cd frontend && npm test`
+- Result: PASS
+- Output summary:
+  - `tests 3`
+  - `pass 3`
+  - `fail 0`
+
+## Per-Task Acceptance Verdict
+
+### Task: Implement backend filtering data model
+- Verdict: `PASS`
+- Evidence:
+  - `BookFilterCriteria` with required fields exists in `backend/repositories/books.py`.
+  - Query builder returns SQL + parameter tuple and uses placeholders (`%s`), with no unsafe interpolation for values.
+  - Optional filters are conditionally applied only when provided.
+  - Relevance scoring includes weighted genre and age rating signals; ranking behavior covered in tests (`tests/test_relevance_ranking.py`).
+  - Additional filter query-shape coverage exists (`tests/test_books_repository_filters.py`).
+  - STATUS documentation for data model/query/relevance exists (`Status Update: Task 273`).
+
+### Task: Expose filtering via search API endpoints
+- Verdict: `PASS`
+- Evidence:
+  - Flask app and routes exist in `backend/app.py` (`/api/books`, `/api/books/search`, `/search`).
+  - Endpoint maps `q`, `genre`, `age_rating`, `subject_matter`, `plot_points`, `character_dynamics`, `spice_level` into `BookFilterCriteria`.
+  - Free-text requests return JSON list book payloads including `id`, `title`, `author`.
+  - Multi-filter subset/monotonic behavior is covered (`tests/test_books_api.py::test_advanced_filter_combination_and_monotonic_subset`).
+  - Invalid filter values return 400 JSON errors (age rating/spice/age range validation in `backend/app.py`, tests in `tests/test_backend_books_api.py` and `tests/test_books_api.py`).
+  - STATUS documents paths, params, and request/response example (`Status Update: Task 272`).
+
+### Task: Optimize and validate filter performance and relevance
+- Verdict: `PASS`
+- Evidence:
+  - Reproducible performance check script exists: `scripts/benchmark_search_performance.py`.
+  - Search index migration exists: `db/migrations/002_search_indexes.sql` (genre/age-related lookup and text-search indexes documented/created).
+  - Query builder includes EXPLAIN-driven optimization rationale in docstring (`backend/repositories/books.py::_build_books_query`).
+  - Relevance tests verify stronger matches rank higher and spice-level changes top result (`tests/test_relevance_ranking.py`).
+  - STATUS includes performance characteristics, index/query tuning steps, and scoring rationale (`Status Update: Task 273`).
+
+## Workflow Goal Validation
+Goal: Advanced filtering and relevance ranking across genre, age rating, subject matter, plot points, character dynamics, and spice level; exposed via current search endpoints and consumable by frontend.
+
+Validation: `PASS`
+- Backend criteria model, query logic, API mapping, tests, and frontend API consumption tests are present and coherent.
+- Current branch bugfix (`035b407`) addresses strict-intersection behavior on legacy `/api/books` filter-only calls without introducing new test failures in this environment.
+
+## Overall Verdict
+`PASS`

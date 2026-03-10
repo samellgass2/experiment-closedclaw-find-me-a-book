@@ -1,48 +1,39 @@
-# Task Report: 212
+# Task Report: TASK_ID=244 RUN_ID=449
 
 ## Summary
+Added an automated backend API test suite for `/api/books` with isolated MySQL schema setup, seeded fixtures, search/filter coverage, combined-filter assertions, and invalid-parameter validation.
 
-Consolidated the search, filters, and results wireframes into one implementation
-overview and updated workflow status completion notes.
+## Changes
+1. Added `tests/test_books_api.py`.
+2. Implemented isolated integration test lifecycle:
+   - creates temporary schema per run
+   - applies `db/migrations/001_init.sql`
+   - seeds representative books/authors/genres
+   - drops schema after tests
+3. Added API assertions for:
+   - free-text search hit and empty result
+   - `genre`, `age_min/age_max`, `subject`, `spice_level`
+   - combined filter intersections
+   - invalid `age_min` with `400` + JSON error payload
+4. Updated `STATUS.md` with:
+   - run command
+   - required environment variables
+   - coverage summary for core book search/filter endpoint tests
 
-Updated files:
-
-- [docs/ui/wireframes-overview.md](docs/ui/wireframes-overview.md)
-- [STATUS.md](STATUS.md)
-
-## What was implemented
-
-1. Added a new overview document linking all three core wireframe docs:
-   - [docs/ui/wireframes-main-search.md](docs/ui/wireframes-main-search.md)
-   - [docs/ui/wireframes-filters-panel.md](docs/ui/wireframes-filters-panel.md)
-   - [docs/ui/wireframes-results-and-items.md](docs/ui/wireframes-results-and-items.md)
-2. Documented an end-to-end user flow from landing on search, to executing
-   query, to applying filters, to reviewing updated results.
-3. Captured key interaction patterns, including:
-   - mobile filter drawer open/stage/apply behavior
-   - desktop and mobile results update behavior after filter changes
-   - responsiveness and load-feel expectations
-4. Added an explicit open UX questions/tradeoffs section for follow-on frontend
-   tasks.
-5. Explicitly stated project-spec alignment that major views (search, filters,
-   results) are complete and ready to guide frontend implementation.
-6. Updated `STATUS.md` with a final workflow note linking to the new overview
-   and marking core discovery wireframes complete.
+## Acceptance Criteria Mapping
+1. `tests/` contains focused API module: `tests/test_books_api.py`.
+2. Single documented command from repo root is provided in `STATUS.md`: `python -m unittest tests.test_books_api -v`.
+3. Search behavior tests include matching and empty-list cases.
+4. Filter tests cover `genre`, `age_min/age_max`, `subject`, `spice_level`, plus combined filters.
+5. Invalid filter handling test verifies `400` JSON error for non-numeric `age_min`.
+6. `STATUS.md` documents run instructions, env vars, and endpoint coverage summary.
 
 ## Validation
+Command run:
+```bash
+python -m unittest tests.test_books_api -v
+```
 
-Executed test commands per repository guidance:
-
-1. `python -m pytest tests/ -q` -> fails in environment (`No module named pytest`)
-2. `python -m unittest discover -s tests -v` -> PASS (`Ran 25 tests`, `OK`)
-
-Acceptance checks verified:
-
-1. `docs/ui/wireframes-overview.md` exists.
-2. The overview links all three required wireframe documents.
-3. The overview describes end-to-end search -> filter -> results flow with
-   references to specific wireframe elements.
-4. The overview explicitly states major-view coverage and implementation
-   readiness.
-5. Open UX questions/tradeoffs section is included.
-6. `STATUS.md` reflects completion and links the overview.
+Result in this runner:
+- `OK (skipped=8)`
+- Skips are due to missing `Flask` and `PyMySQL` packages in this environment; test module is designed to run fully when dependencies are installed.

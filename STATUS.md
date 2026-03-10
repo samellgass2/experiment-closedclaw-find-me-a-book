@@ -1,3 +1,165 @@
+# Status Update: Task 244
+
+## Core Backend API for Book Search and Filter Endpoints
+
+- Added end-to-end backend API integration tests in
+  `tests/test_books_api.py` for `GET /api/books`.
+- Tests use a temporary, isolated MySQL schema created per test run:
+  - creates schema `dev_find_me_a_book_task244_<timestamp>`
+  - applies `db/migrations/001_init.sql`
+  - seeds representative records across genres, age ratings, subjects, and
+    spice-level mappings
+  - drops the schema in teardown
+- Coverage added for core behavior:
+  - free-text search (`q`) match case
+  - free-text search no-results case
+  - per-filter behavior: `genre`, `age_min/age_max`, `subject`,
+    `spice_level`
+  - combined filters intersection behavior
+  - invalid parameter handling (`age_min=abc`) with `400` JSON error payload
+
+### How To Run The Book API Tests
+
+From repository root:
+
+```bash
+python -m unittest tests.test_books_api -v
+```
+
+Required environment variables:
+
+- `DEV_MYSQL_HOST`
+- `DEV_MYSQL_PORT`
+- `DEV_MYSQL_USER`
+- `DEV_MYSQL_PASSWORD`
+
+Optional:
+
+- `DEV_MYSQL_DATABASE` is not required for this suite because it provisions
+  and tears down its own temporary schema.
+
+Notes:
+
+- The test module skips gracefully if `Flask` or `PyMySQL` are not installed.
+- No manual database setup is required for this specific suite beyond providing
+  the MySQL environment variables above.
+
+# Status Update: Task 243
+
+## Core Backend API for Book Search and Filter Endpoints
+
+- Extended `GET /api/books` in `backend/app.py` with optional validated query
+  parameters:
+  - `genre`
+  - `age_min`
+  - `age_max`
+  - `subject`
+  - `spice_level`
+- Added validation and consistent `400` JSON errors for invalid inputs:
+  - duplicate parameter values (for single-value params),
+  - non-integer or out-of-range age values,
+  - unsupported `spice_level`,
+  - invalid `age_min` / `age_max` range.
+- Updated `backend/repositories/books.py` to apply filters with conditional,
+  parameterized SQL clauses so multiple filters compose conjunctively (`AND`).
+- Added repository tests verifying filter clause composition and placeholder
+  parameter usage:
+  - `tests/test_books_repository_filters.py`
+
+### `/api/books` Filter Matrix
+
+| Query parameter | Allowed values / range | DB mapping | Behavior |
+| --- | --- | --- | --- |
+| `genre` | Non-empty string, max 80 chars | `book_genres` + `genres` (`genres.code` or `genres.display_name`) | Includes books linked to matching genre code/display name (case-insensitive) |
+| `age_min` | Integer `0..120` | Derived from `books.maturity_rating` age bands (`general=0-12`, `teen=13-17`, `mature=18+`) | Keeps books whose age band upper bound is `>= age_min` |
+| `age_max` | Integer `0..120` | Derived from `books.maturity_rating` age bands (`general=0-12`, `teen=13-17`, `mature=18+`) | Keeps books whose age band lower bound is `<= age_max` |
+| `subject` | Non-empty string, max 80 chars | `books.description` | Case-insensitive `LIKE` match on description text |
+| `spice_level` | `low`, `medium`, `high` | mapped to `books.maturity_rating` (`low->general`, `medium->teen`, `high->mature`) | Filters on mapped maturity rating |
+
+Combined filters are conjunctive: every provided filter must match.
+
+Example combined request:
+
+```bash
+curl -s "http://localhost:8000/api/books?genre=fantasy&subject=friendship&spice_level=low&age_min=10&age_max=17"
+```
+
+Expected behavior: return only books that match the fantasy genre relation,
+contain "friendship" in description, map to low spice (`maturity_rating =
+general`), and overlap the requested age range.
+
+# Status Update: Task 242
+
+## Core Backend API for Book Search and Filter Endpoints
+
+- Implemented `GET /api/books` in `backend/app.py`.
+- Added parameter handling for `q`:
+  - Missing `q`: returns a default list (latest books, limit 20).
+  - Present `q`: performs free-text search across book title, description,
+    and author names.
+  - Multiple `q` values or a value longer than 200 chars: returns `400`.
+- Added repository layer module at `backend/repositories/books.py` with
+  parameterized SQL (using `%s` placeholders) and row mapping to stable
+  JSON keys:
+  - `id`
+  - `title`
+  - `author`
+  - `genre`
+  - `age_rating`
+  - `description`
+- Added database error handling for `/api/books`: DB connection/query failures
+  return `500` with JSON payload:
+  - `{"error":"database_unavailable","message":"Unable to fetch books at this time."}`
+- Added route tests at `tests/test_backend_books_api.py` covering:
+  - default behavior without `q`
+  - search behavior with `q`
+  - invalid duplicate `q` parameter
+  - database failure path
+
+### API Examples
+
+1. Default list:
+```bash
+curl -s "http://localhost:8000/api/books"
+```
+Example response:
+```json
+[
+  {
+    "id": 3,
+    "title": "The Great Adventure",
+    "author": "Alex Carter",
+    "genre": "Fantasy",
+    "age_rating": "teen",
+    "description": "An epic coming-of-age journey."
+  }
+]
+```
+
+2. Search by text:
+```bash
+curl -s "http://localhost:8000/api/books?q=alex"
+```
+Search semantics: case-insensitive `LIKE` matching against title, description,
+and joined author names.
+
+# Status Update: Task 241
+
+## Core Backend API for Book Search and Filter Endpoints
+
+- Added initial backend service package at `backend/` with Flask as the API
+  framework baseline for Backend API Development.
+- Added app entrypoint at `backend/app.py` with an app factory and health check
+  route `GET /` returning JSON status for service readiness checks.
+- Added reusable configuration module at `backend/config.py` that exposes typed
+  app and database settings from environment variables, aligned to existing
+  MySQL setup keys: `DEV_MYSQL_HOST`, `DEV_MYSQL_PORT`, `DEV_MYSQL_USER`,
+  `DEV_MYSQL_PASSWORD`, `DEV_MYSQL_DATABASE`.
+- Added dependency manifest `requirements.txt` including `Flask` and `PyMySQL`
+  for web serving and MySQL connectivity in future API endpoints.
+- Local start command for development: `python -m backend.app` (serves on
+  `http://0.0.0.0:8000`).
+
 # Status Update: Task 212
 
 ## User Interface Wireframes for Search, Filters, and Results
@@ -580,6 +742,299 @@ OK
 Workflow goal met: the repository contains low- to mid-fidelity wireframes for
 search, filtering, and results views with coherent desktop/mobile behavior and
 an end-to-end UX foundation for frontend implementation.
+
+## Overall Verdict
+
+`PASS`
+
+# Tester Report: Workflow #23 (Core Backend API for Book Search and Filter Endpoints)
+
+Date: 2026-03-09
+Branch: workflow/23/dev
+Role: TESTER (verification only, no code changes)
+
+## Tests Run and Results
+
+1. `python -m pytest tests/ -q`
+- Result: FAILED to start test runner (`No module named pytest`).
+
+2. `pytest tests/ -q`
+- Result: FAILED to start test runner (`pytest: command not found`).
+
+3. `python -m unittest discover -s tests -v` (before installing dependencies)
+- Result: PASSED with skips (`Ran 46 tests`, `OK`, `skipped=18`) due to missing `Flask` for API tests.
+
+4. `python -m pip install -r requirements.txt`
+- Result: PASSED (installed Flask; PyMySQL already present).
+
+5. `python -m unittest discover -s tests -v` (after dependencies installed)
+- Result: PASSED (`Ran 46 tests in 0.468s`, `OK`, no skips).
+
+6. Runtime smoke checks with live server:
+- Started service with `python -m backend.app`
+- `GET /` returned `200` with JSON: `{"service":"find-me-a-book-backend","status":"ok"}`
+- `GET /api/books` returned `200` with JSON list payload
+- `GET /api/books?age_min=abc` returned `400` with JSON error payload
+
+## Per-Task Acceptance Verdict
+
+- Task #241: PASS
+- Task #242: PASS
+- Task #243: PASS
+- Task #244: PASS
+
+## Acceptance Criteria Verification Notes
+
+Task #241:
+- Backend structure exists at `backend/` with entrypoint `backend/app.py`.
+- `python -m backend.app` starts server; `GET /` responds `200` JSON health payload.
+- `backend/config.py` exposes env-driven DB config (`DEV_MYSQL_*`).
+- `requirements.txt` includes `Flask` and `PyMySQL`.
+- `STATUS.md` documents framework, entrypoint, and start command.
+
+Task #242:
+- `GET /api/books` implemented and returns `200` without `q` (default list behavior).
+- `q` search implemented across `title`, `description`, and `author` via repository SQL.
+- SQL is in `backend/repositories/books.py` and uses `%s` placeholders.
+- Database failure path returns `500` JSON error (`database_unavailable`) without stack trace in response body.
+- `STATUS.md` documents endpoint semantics and curl examples.
+
+Task #243:
+- Supported filters implemented: `genre`, `age_min`, `age_max`, `subject`, `spice_level`.
+- Combined filters are applied conjunctively (`AND`) in repository query builder.
+- Invalid values (e.g., non-numeric `age_min`, unsupported `spice_level`) return `400` JSON errors.
+- Filter SQL uses parameterized placeholders; no unsafe interpolation of user inputs.
+- `STATUS.md` contains filter matrix and combined-filter example.
+
+Task #244:
+- `tests/` includes focused API modules: `tests/test_books_api.py`, `tests/test_backend_books_api.py`.
+- Tests run from repo root via single documented command (`python -m unittest tests.test_books_api -v`), and full suite runs with `python -m unittest discover -s tests -v`.
+- Coverage includes search match/no-match, per-filter behavior, combined filters, and invalid parameter handling.
+- Integration tests provision and tear down temporary MySQL schema automatically.
+- `STATUS.md` documents how to run tests and required environment variables.
+
+## Bugs Filed
+
+- None.
+
+## Integration / Regression Check
+
+- The backend structure, endpoint implementation, repository layer, and tests operate cohesively.
+- No functional regressions were observed in existing crawler/database test areas.
+
+## Overall Verdict
+
+CLEAN
+
+# QA Validation Summary: Workflow #23
+
+## Metadata
+
+1. Project: `find-me-a-book`
+2. Workflow: `#23 Core Backend API for Book Search and Filter Endpoints`
+3. Branch reviewed: `workflow/23/dev`
+4. Validation date (UTC): `2026-03-10`
+
+## Commits Reviewed
+
+1. `6819bab` task/257: supervisor safety-commit (Codex omitted git commit)
+2. `a5ed0c4` bugfix: Task 244 API integration tests fail: seeded genre code violates chk_genres_code
+3. `585d053` task/244: update task report with api test coverage
+4. `d7bb699` task/244: add isolated backend book API integration tests
+5. `d63fdd8` task/243: add /api/books filter params and SQL filtering
+6. `ee4c377` task/242: add core /api/books search endpoint and repository
+7. `15df61d` task/241: scaffold flask backend service entrypoint and config
+
+## Diff Scope Reviewed
+
+Command:
+```bash
+git diff main...HEAD --stat
+```
+
+Output:
+```text
+ .gitignore                             |   4 +
+ STATUS.md                              | 241 +++++++++++++++++++++
+ TASK_REPORT.md                         |  79 +++----
+ backend/__init__.py                    |   1 +
+ backend/app.py                         | 201 +++++++++++++++++
+ backend/config.py                      |  92 ++++++++
+ backend/repositories/__init__.py       |   2 +
+ backend/repositories/books.py          | 261 ++++++++++++++++++++++
+ requirements.txt                       |   2 +
+ tests/test_backend_books_api.py        | 200 +++++++++++++++++
+ tests/test_books_api.py                | 381 +++++++++++++++++++++++++++++++++
+ tests/test_books_repository_filters.py | 104 +++++++++
+ 12 files changed, 1524 insertions(+), 44 deletions(-)
+```
+
+## Test Commands Run And Results
+
+1. Command:
+```bash
+python --version
+```
+Output:
+```text
+Python 3.12.13
+```
+Result: `PASS` (environment check)
+
+2. Command:
+```bash
+python -m pytest tests/ -q
+```
+Output:
+```text
+/usr/local/bin/python: No module named pytest
+```
+Result: `FAIL` (`pytest` not installed in environment)
+
+3. Command:
+```bash
+pytest tests/ -q
+```
+Output:
+```text
+/bin/bash: line 1: pytest: command not found
+```
+Result: `FAIL` (`pytest` executable unavailable)
+
+4. Command:
+```bash
+python -m unittest discover
+```
+Output:
+```text
+----------------------------------------------------------------------
+Ran 0 tests in 0.000s
+
+NO TESTS RAN
+```
+Result: `SKIPPED` (default discovery root did not collect tests)
+
+5. Command:
+```bash
+python -m pip install -r requirements.txt
+```
+Output (summary):
+```text
+Successfully installed Flask-3.1.3 blinker-1.9.0 click-8.3.1 itsdangerous-2.2.0 jinja2-3.1.6 markupsafe-3.0.3 werkzeug-3.1.6
+```
+Result: `PASS`
+
+6. Command:
+```bash
+python -m unittest discover -s tests -v
+```
+Output (summary):
+```text
+Ran 46 tests in 0.783s
+
+OK
+```
+Result: `PASS`
+
+7. Command:
+```bash
+python -m unittest tests.test_backend_books_api -v
+```
+Output (summary):
+```text
+Ran 10 tests in 0.106s
+
+OK
+```
+Result: `PASS`
+
+8. Command:
+```bash
+python -m unittest tests.test_books_repository_filters -v
+```
+Output:
+```text
+Ran 3 tests in 0.004s
+
+OK
+```
+Result: `PASS`
+
+9. Command:
+```bash
+python -m unittest tests.test_books_api -v
+```
+Output:
+```text
+Ran 8 tests in 0.854s
+
+OK
+```
+Result: `PASS`
+
+10. Command:
+```bash
+python -m backend.app  # started in background for verification
+curl -s -o /tmp/backend_root_resp.json -w "%{http_code}" http://127.0.0.1:8000/
+cat /tmp/backend_root_resp.json
+```
+Output:
+```text
+HTTP 200
+{"service":"find-me-a-book-backend","status":"ok"}
+```
+Result: `PASS`
+
+## Acceptance Criteria Verdicts
+
+### Task: Set up backend service structure
+1. Service start and health route: `PASS`
+2. Config module exposes env-driven DB params: `PASS`
+3. Requirements include framework and MySQL driver: `PASS`
+4. STATUS.md documents entrypoint/framework/start command: `PASS`
+
+Verdict: `PASS`
+
+### Task: Implement core book search endpoint
+1. `GET /api/books` without `q` returns 200 default list behavior: `PASS`
+2. `GET /api/books?q=test` search over title/author with stable keys: `PASS`
+3. SQL in repository/DAO uses placeholders: `PASS`
+4. DB unreachable returns non-200 JSON error payload without raw trace in response: `PASS`
+5. STATUS.md documents endpoint semantics + curl + response shape: `PASS`
+
+Verdict: `PASS`
+
+### Task: Add filtering parameters to book endpoint
+1. `genre` filter behavior: `PASS`
+2. `age_min` / `age_max` inclusive-range behavior: `PASS`
+3. Combined filters applied conjunctively: `PASS`
+4. Invalid values return 400 JSON error: `PASS`
+5. Filter SQL remains parameterized (no unsafe interpolation): `PASS`
+6. STATUS.md lists supported filters + combined example: `PASS`
+
+Verdict: `PASS`
+
+### Task: Introduce automated tests for book API
+1. `tests/` exists with book API module: `PASS`
+2. Single documented run command exists and runs without manual schema setup beyond documented env vars: `PASS`
+3. Search tests include match and empty-list cases: `PASS`
+4. Filter tests include each supported filter and combined filters: `PASS`
+5. Invalid filter handling tested for 400 JSON error: `PASS`
+6. STATUS.md documents test execution, env vars, and coverage scope: `PASS`
+
+Verdict: `PASS`
+
+## Workflow Goal Validation
+
+Goal: Implement initial backend REST API for book search/filter retrieval (no user-account scope).
+
+Validation outcome: `PASS`.
+
+Evidence includes:
+- Flask service entrypoint and health route in `backend/app.py`
+- Env-driven backend config in `backend/config.py`
+- Parameterized query/search/filter repository in `backend/repositories/books.py`
+- Route/unit/integration coverage in `tests/test_backend_books_api.py`, `tests/test_books_repository_filters.py`, and `tests/test_books_api.py`
 
 ## Overall Verdict
 

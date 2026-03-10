@@ -2528,3 +2528,62 @@ PASS: Workflow #35 goals are met. The branch provides reproducible dependency bo
 ### Overall Verdict
 
 `PASS`
+
+## Tester Report - Workflow #35 (2026-03-10)
+
+- Branch: `workflow/35/dev`
+- Tester role: verification only (no code changes)
+
+### Tests Run
+
+1. `. /workspace/.qa-venv/bin/activate && DEV_MYSQL_HOST=dev-mysql DEV_MYSQL_PORT=3306 DEV_MYSQL_USER=devagent DEV_MYSQL_PASSWORD=2d81badcbb5dd418bebc80fad81bb6e5 DEV_MYSQL_DATABASE=dev_find_me_a_book python -m pytest`
+- Result: PASS
+- Output summary: `87 passed in 7.47s`
+
+2. `cd frontend && npm test`
+- Result: PASS
+- Output summary: `3 passed, 0 failed`
+
+3. `python -m venv /tmp/find-me-a-book-w35-tester-venv && . /tmp/find-me-a-book-w35-tester-venv/bin/activate && python -m pip install --upgrade pip && python -m pip install -r requirements.txt`
+- Result: PASS
+- Output summary: dependency install succeeded in clean venv with no resolver errors.
+
+4. `. /tmp/find-me-a-book-w35-tester-venv/bin/activate && DEV_MYSQL_HOST=dev-mysql DEV_MYSQL_PORT=3306 DEV_MYSQL_USER=devagent DEV_MYSQL_PASSWORD=2d81badcbb5dd418bebc80fad81bb6e5 DEV_MYSQL_DATABASE=dev_find_me_a_book python -m pytest`
+- Result: PASS
+- Output summary: `87 passed in 9.38s`
+
+### Acceptance Verification
+
+Task #346
+- PASS: `requirements.txt` exists and includes `flask`, `pymysql`, `requests`, `beautifulsoup4`, `pytest`.
+- PASS: Runtime third-party imports used in repository are covered by `requirements.txt`.
+- PASS: `pip install -r requirements.txt` succeeds in a clean virtual environment.
+- PASS: Documentation references `pip install -r requirements.txt` as canonical bootstrap (`README.md`).
+- PASS: `STATUS.md` documents requirements/bootstrap updates.
+
+Task #347
+- PASS: Root `config.py` exists and is importable.
+- PASS: `config.py` defines DB + book source + crawler settings via env vars with defaults (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `BOOK_SOURCE_BASE_URL`, `BOOK_SOURCE_API_KEY`, `CRAWLER_RATE_LIMIT_PER_MIN`).
+- PASS: No production credentials, API keys, or production-only hostnames found hard-coded in runtime code.
+- PASS: Runtime modules use centralized config (`backend/config.py`, `db/setup_database.py`, `crawler/goodreads_crawler.py`).
+- PASS: `STATUS.md` documents env vars/defaults and relation to `dev-mysql` / `dev_find_me_a_book`.
+
+Task #348
+- PASS: Pytest-discoverable modules exist under top-level `tests/`, including `tests/test_smoke_env.py`.
+- PASS: Canonical command `python -m pytest` runs successfully from project root in clean environment.
+- PASS: Smoke test validates core module importability (`config`, backend/db/crawler modules).
+- PASS: No conflicting primary test runner documentation found; pytest is documented as canonical.
+- PASS: `STATUS.md` and `README.md` mention `python -m pytest` as canonical for local/CI.
+
+### Bugs Filed
+
+- None
+
+### Integration / Regression Check
+
+- PASS: Tasks #346, #347, and #348 work cohesively (clean bootstrap + centralized config + canonical pytest flow).
+- PASS: No obvious regressions detected in Python or frontend tests.
+
+### Overall Verdict
+
+`CLEAN`

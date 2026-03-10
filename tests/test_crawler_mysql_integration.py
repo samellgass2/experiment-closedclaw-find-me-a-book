@@ -125,10 +125,16 @@ class CrawlerMySQLIntegrationTests(unittest.TestCase):
                   page_count,
                   language_code,
                   average_rating,
-                  ratings_count,
-                  publisher,
-                  source_provider,
-                  external_source_id
+                ratings_count,
+                publisher,
+                taxonomy_version,
+                canonical_genres,
+                canonical_plot_tags,
+                canonical_character_dynamics,
+                age_band,
+                spice_level,
+                source_provider,
+                external_source_id
                 FROM books
                 WHERE id = %s
                 """,
@@ -143,8 +149,8 @@ class CrawlerMySQLIntegrationTests(unittest.TestCase):
         title = f"Integration Book {suffix}"
         author_name = f"Integration Author {suffix}"
         second_author_name = f"Second Integration Author {suffix}"
-        genre_name = f"Integration Genre {suffix}"
-        second_genre_name = f"Integration Complete Genre {suffix}"
+        genre_name = "Fantasy"
+        second_genre_name = "Young Adult"
         expected_rating = 4.30
         expected_rating_count = 80
 
@@ -211,8 +217,13 @@ class CrawlerMySQLIntegrationTests(unittest.TestCase):
             self.assertAlmostEqual(float(row[6]), expected_rating, places=2)
             self.assertEqual(row[7], expected_rating_count)
             self.assertEqual(row[8], "Integration Press")
-            self.assertEqual(row[9], "goodreads")
-            self.assertEqual(row[10], external_id)
+            self.assertEqual(row[9], "v1")
+            self.assertIn("fantasy", str(row[10]).lower())
+            self.assertIn("young-adult", str(row[10]).lower())
+            self.assertEqual(row[13], "young-adult")
+            self.assertEqual(row[14], "spice-3-moderate")
+            self.assertEqual(row[15], "goodreads")
+            self.assertEqual(row[16], external_id)
             self.assertEqual(
                 [entry[0] for entry in author_rows],
                 [author_name, second_author_name],
@@ -233,8 +244,8 @@ class CrawlerMySQLIntegrationTests(unittest.TestCase):
         second_title = f"Upsert Book Updated {suffix}"
         first_author = f"Upsert Author {suffix}"
         second_author = f"Second Upsert Author {suffix}"
-        genre_name = f"Upsert Genre {suffix}"
-        second_genre_name = f"Upsert Complete Genre {suffix}"
+        genre_name = "Fantasy"
+        second_genre_name = "Young Adult"
 
         first_search_html, first_book_html = self._create_fixture_payload(
             external_id=external_id,
@@ -284,6 +295,11 @@ class CrawlerMySQLIntegrationTests(unittest.TestCase):
             self.assertEqual(str(row[3]), "2023-12-03")
             self.assertAlmostEqual(float(row[6]), 4.70, places=2)
             self.assertEqual(row[7], 42)
+            self.assertEqual(row[9], "v1")
+            self.assertIn("fantasy", str(row[10]).lower())
+            self.assertIn("young-adult", str(row[10]).lower())
+            self.assertEqual(row[13], "young-adult")
+            self.assertEqual(row[14], "spice-3-moderate")
 
             with conn.cursor() as cursor:
                 cursor.execute(

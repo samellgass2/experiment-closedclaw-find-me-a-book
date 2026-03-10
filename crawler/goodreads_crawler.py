@@ -17,6 +17,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote_plus, urljoin, urlparse
 from urllib.request import Request, urlopen
 
+from crawler.normalization import normalize_openlibrary_book
+from crawler.taxonomy_config import get_age_band, get_spice_level, get_taxonomy_version
 
 GOODREADS_BASE_URL = "https://www.goodreads.com"
 BOOK_PATH_PATTERN = re.compile(r"^/book/show/(\d+)")
@@ -51,6 +53,13 @@ class BookRecord:
     cover_image_url: str | None = None
     authors: list[str] = field(default_factory=list)
     genres: list[str] = field(default_factory=list)
+    taxonomy_version: str | None = None
+    canonical_genres: list[str] = field(default_factory=list)
+    canonical_plot_tags: list[str] = field(default_factory=list)
+    canonical_character_dynamics: list[str] = field(default_factory=list)
+    age_band: str = "adult"
+    spice_level: str = "spice-2-mild"
+    maturity_rating: str = "general"
 
 
 @dataclass(frozen=True)
@@ -175,12 +184,14 @@ class GoodreadsCrawler:
         user_agent: str = "find-me-a-book-bot/1.0 (+https://example.local)",
         max_attempts: int = 3,
         retry_backoff_seconds: float = 1.0,
+        enable_normalization: bool = True,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
         self.user_agent = user_agent
         self.max_attempts = max(1, max_attempts)
         self.retry_backoff_seconds = max(0.0, retry_backoff_seconds)
+        self.enable_normalization = enable_normalization
 
     def crawl(self, query: str, limit: int = 10) -> list[BookRecord]:
         """Search Goodreads and fetch book details for each candidate URL."""
@@ -264,6 +275,13 @@ class GoodreadsCrawler:
             authors = ["Unknown Author"]
 
         genres = list(dict.fromkeys(parser.genres))
+        taxonomy_enrichment = build_taxonomy_enrichment(
+            title=title,
+            description=description,
+            authors=authors,
+            genres=genres,
+            enabled=self.enable_normalization,
+        )
 
         return BookRecord(
             external_source_id=external_source_id,
@@ -282,6 +300,15 @@ class GoodreadsCrawler:
             cover_image_url=cover_image_url,
             authors=authors,
             genres=genres,
+            taxonomy_version=taxonomy_enrichment.taxonomy_version,
+            canonical_genres=taxonomy_enrichment.canonical_genres,
+            canonical_plot_tags=taxonomy_enrichment.canonical_plot_tags,
+            canonical_character_dynamics=(
+                taxonomy_enrichment.canonical_character_dynamics
+            ),
+            age_band=taxonomy_enrichment.age_band,
+            spice_level=taxonomy_enrichment.spice_level,
+            maturity_rating=taxonomy_enrichment.maturity_rating,
         )
 
     def _fetch_html(self, url: str) -> str:
@@ -420,11 +447,13 @@ class MySQLBookRepository:
                     INSERT INTO books (
                       title, subtitle, description, isbn_10, isbn_13,
                       publication_date, page_count, language_code,
-                      average_rating, ratings_count, publisher,
-                      cover_image_url, source_provider, external_source_id
+                      average_rating, ratings_count, maturity_rating, publisher,
+                      cover_image_url, source_provider, external_source_id,
+                      taxonomy_version, canonical_genres, canonical_plot_tags,
+                      canonical_character_dynamics, age_band, spice_level
                     )
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                      'goodreads', %s)
+                      %s, 'goodreads', %s, %s, %s, %s, %s, %s, %s)
                     ON DUPLICATE KEY UPDATE
                       id = LAST_INSERT_ID(id),
                       title = VALUES(title),
@@ -437,10 +466,17 @@ class MySQLBookRepository:
                       language_code = VALUES(language_code),
                       average_rating = VALUES(average_rating),
                       ratings_count = VALUES(ratings_count),
+                      maturity_rating = VALUES(maturity_rating),
                       publisher = VALUES(publisher),
                       cover_image_url = VALUES(cover_image_url),
                       source_provider = 'goodreads',
-                      external_source_id = VALUES(external_source_id)
+                      external_source_id = VALUES(external_source_id),
+                      taxonomy_version = VALUES(taxonomy_version),
+                      canonical_genres = VALUES(canonical_genres),
+                      canonical_plot_tags = VALUES(canonical_plot_tags),
+                      canonical_character_dynamics = VALUES(canonical_character_dynamics),
+                      age_band = VALUES(age_band),
+                      spice_level = VALUES(spice_level)
                     """,
                     (
                         record.title,
@@ -453,9 +489,16 @@ class MySQLBookRepository:
                         record.language_code,
                         record.average_rating,
                         record.ratings_count,
+                        record.maturity_rating,
                         record.publisher,
                         record.cover_image_url,
                         record.external_source_id,
+                        record.taxonomy_version or get_taxonomy_version(),
+                        dump_json_array(record.canonical_genres),
+                        dump_json_array(record.canonical_plot_tags),
+                        dump_json_array(record.canonical_character_dynamics),
+                        record.age_band,
+                        record.spice_level,
                     ),
                 )
                 book_id = int(cursor.lastrowid)
@@ -607,6 +650,81 @@ def safe_int(value: Any, default: int = 0) -> int:
         return default
 
 
+@dataclass(frozen=True)
+class TaxonomyEnrichment:
+    """Normalized taxonomy fields attached to crawler book records."""
+
+    taxonomy_version: str | None
+    canonical_genres: list[str]
+    canonical_plot_tags: list[str]
+    canonical_character_dynamics: list[str]
+    age_band: str
+    spice_level: str
+    maturity_rating: str
+
+
+def build_taxonomy_enrichment(
+    *,
+    title: str,
+    description: str | None,
+    authors: list[str],
+    genres: list[str],
+    enabled: bool,
+) -> TaxonomyEnrichment:
+    """Build canonical taxonomy fields from crawler payload content."""
+    if not enabled:
+        return TaxonomyEnrichment(
+            taxonomy_version=None,
+            canonical_genres=[],
+            canonical_plot_tags=[],
+            canonical_character_dynamics=[],
+            age_band="adult",
+            spice_level="spice-2-mild",
+            maturity_rating="general",
+        )
+
+    raw_payload: dict[str, Any] = {
+        "title": title,
+        "description": description or "",
+        "authors": [{"name": author_name} for author_name in authors],
+        "subjects": genres,
+    }
+    normalized = normalize_openlibrary_book(raw_payload)
+    age_band = normalized["age_band"]
+    spice_level = normalized["spice_level"]
+    maturity_rating = derive_maturity_rating(
+        age_band=age_band,
+        spice_level=spice_level,
+    )
+    return TaxonomyEnrichment(
+        taxonomy_version=normalized["taxonomy_version"],
+        canonical_genres=normalized["canonical_genres"],
+        canonical_plot_tags=normalized["canonical_plot_tags"],
+        canonical_character_dynamics=normalized["canonical_character_dynamics"],
+        age_band=age_band,
+        spice_level=spice_level,
+        maturity_rating=maturity_rating,
+    )
+
+
+def derive_maturity_rating(*, age_band: str, spice_level: str) -> str:
+    """Map normalized age/spice taxonomy values to schema maturity ratings."""
+    age_band_entry = get_age_band(age_band)
+    if age_band_entry is not None:
+        return age_band_entry.maturity_rating
+
+    spice_level_entry = get_spice_level(spice_level)
+    if spice_level_entry is not None:
+        return spice_level_entry.maturity_rating_hint
+
+    return "general"
+
+
+def dump_json_array(values: list[str]) -> str:
+    """Serialize canonical ID arrays for JSON columns."""
+    return json.dumps(values, ensure_ascii=True)
+
+
 def run_cli(argv: list[str] | None = None) -> int:
     """CLI entrypoint for Goodreads crawling and MySQL persistence."""
     parser = argparse.ArgumentParser(
@@ -639,6 +757,15 @@ def run_cli(argv: list[str] | None = None) -> int:
         default=None,
         help="MySQL database name. Defaults to DEV_MYSQL_DATABASE.",
     )
+    parser.add_argument(
+        "--normalize",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Enable taxonomy normalization/enrichment before persistence "
+            "(default: enabled)."
+        ),
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -647,7 +774,7 @@ def run_cli(argv: list[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
-    crawler = GoodreadsCrawler(max_attempts=3)
+    crawler = GoodreadsCrawler(max_attempts=3, enable_normalization=args.normalize)
     try:
         records = crawler.crawl(query=args.query, limit=args.limit)
     except BlockedCrawlError as exc:

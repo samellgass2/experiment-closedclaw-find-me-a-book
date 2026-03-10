@@ -1,3 +1,69 @@
+# Status Update: Task 336
+
+## Wire Normalization into Crawler Ingestion Pipeline
+
+- Updated the crawler ingestion path in `crawler/goodreads_crawler.py` so every
+  crawled book now runs through `crawler.normalization.normalize_openlibrary_book(...)`
+  before persistence.
+- Normalization is applied inside `GoodreadsCrawler.fetch_book_record(...)` via
+  `build_taxonomy_enrichment(...)`, which builds a raw normalization payload from
+  parsed Goodreads fields (title, description, authors, genres/subjects).
+- The resulting canonical taxonomy fields are attached to `BookRecord` and then
+  written by `MySQLBookRepository.upsert_book(...)` in the same idempotent
+  `INSERT ... ON DUPLICATE KEY UPDATE` flow.
+- Persisted normalized fields now include:
+  - `taxonomy_version`
+  - `canonical_genres`
+  - `canonical_plot_tags`
+  - `canonical_character_dynamics`
+  - `age_band`
+  - `spice_level`
+  - plus derived `maturity_rating` mapped from taxonomy age/spice metadata.
+
+### CLI Behavior
+
+- Added crawler flag:
+  - `--normalize` / `--no-normalize`
+- Default behavior is normalization enabled (`--normalize`), aligned to v1
+  taxonomy ingestion requirements.
+- `--no-normalize` keeps crawler ingestion operational while bypassing enrichment.
+
+### Database Schema/Migration
+
+- Added migration `db/migrations/003_book_taxonomy_fields.sql` to append taxonomy
+  columns and lookup indexes on `books`.
+- Updated `db/schema.sql` snapshot with the same taxonomy columns.
+
+### Test Coverage Added/Updated
+
+- `tests/test_goodreads_crawler.py`
+  - validates normalization is invoked during crawler parsing and its output is
+    used to construct the persisted `BookRecord`.
+  - validates repository upsert SQL carries canonical taxonomy payload fields.
+- `tests/test_crawler_mysql_integration.py`
+  - validates DB rows include normalized taxonomy fields and that reruns update
+    existing rows without duplicates.
+- `tests/test_crawler_validation_smoke.py`
+  - validates fixture-driven crawl -> DB flow stores canonical taxonomy fields.
+  - validates CLI normalization default-on behavior and `--no-normalize` toggle.
+
+### Run Updated Ingestion Flow
+
+```bash
+python scripts/run_goodreads_crawler.py \
+  --query "young adult fantasy found family" \
+  --limit 10
+```
+
+Disable normalization explicitly (non-default):
+
+```bash
+python scripts/run_goodreads_crawler.py \
+  --query "young adult fantasy found family" \
+  --limit 10 \
+  --no-normalize
+```
+
 # Status Update: Task 335
 
 ## Open Library Field Normalization Utilities

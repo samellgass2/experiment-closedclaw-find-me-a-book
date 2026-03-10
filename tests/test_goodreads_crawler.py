@@ -7,6 +7,7 @@ from crawler.goodreads_crawler import (
     BookRecord,
     GoodreadsCrawler,
     MySQLBookRepository,
+    dump_json_array,
     parse_publication_date,
     resolve_mysql_config,
 )
@@ -125,6 +126,49 @@ class GoodreadsCrawlerTests(unittest.TestCase):
         self.assertEqual(record.authors, ["Ada Lovelace"])
         self.assertIn("Fantasy", record.genres)
         self.assertIn("Science Fiction", record.genres)
+        self.assertEqual(record.taxonomy_version, "v1")
+        self.assertIn("fantasy", record.canonical_genres)
+        self.assertIn("science-fiction", record.canonical_genres)
+        self.assertEqual(record.age_band, "adult")
+        self.assertEqual(record.spice_level, "spice-2-mild")
+        self.assertEqual(record.maturity_rating, "mature")
+
+    def test_fetch_book_record_calls_normalization_before_record_build(self):
+        crawler = GoodreadsCrawler(base_url="https://www.goodreads.com")
+        crawler._fetch_html = lambda _: BOOK_HTML
+        with patch(
+            "crawler.goodreads_crawler.normalize_openlibrary_book",
+            return_value={
+                "source": "openlibrary",
+                "taxonomy_version": "v1",
+                "title": "The Pragmatic Reader",
+                "authors": ["Ada Lovelace"],
+                "description": "A sample description",
+                "canonical_genres": ["fantasy"],
+                "canonical_plot_tags": ["found-family"],
+                "canonical_character_dynamics": ["rivals"],
+                "genres": ["fantasy"],
+                "plot_tags": ["found-family"],
+                "character_dynamics": ["rivals"],
+                "age_band": "young-adult",
+                "spice_level": "spice-3-moderate",
+            },
+        ) as normalization_mock:
+            record = crawler.fetch_book_record(
+                "https://www.goodreads.com/book/show/12345-test"
+            )
+
+        normalization_mock.assert_called_once()
+        normalization_input = normalization_mock.call_args.args[0]
+        self.assertEqual(normalization_input["title"], "The Pragmatic Reader")
+        self.assertEqual(normalization_input["authors"], [{"name": "Ada Lovelace"}])
+        self.assertIn("Fantasy", normalization_input["subjects"])
+        self.assertEqual(record.canonical_genres, ["fantasy"])
+        self.assertEqual(record.canonical_plot_tags, ["found-family"])
+        self.assertEqual(record.canonical_character_dynamics, ["rivals"])
+        self.assertEqual(record.age_band, "young-adult")
+        self.assertEqual(record.spice_level, "spice-3-moderate")
+        self.assertEqual(record.maturity_rating, "teen")
 
     def test_parse_publication_date_supports_year_only(self):
         parsed = parse_publication_date("Published in 1998 by Demo House")
@@ -155,6 +199,12 @@ class RepositoryTests(unittest.TestCase):
         self.assertTrue(conn.committed)
         self.assertFalse(conn.rolled_back)
         self.assertGreaterEqual(len(conn.cursor_obj.exec_calls), 9)
+        insert_sql, insert_params = conn.cursor_obj.exec_calls[0]
+        self.assertIn("canonical_genres", insert_sql)
+        self.assertEqual(insert_params[14], "v1")
+        self.assertEqual(insert_params[15], dump_json_array([]))
+        self.assertEqual(insert_params[18], "adult")
+        self.assertEqual(insert_params[19], "spice-2-mild")
 
 
 class MySQLConfigTests(unittest.TestCase):

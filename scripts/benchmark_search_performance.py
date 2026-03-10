@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import statistics
 import time
 from dataclasses import dataclass
@@ -29,6 +28,7 @@ import sys
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+import config as runtime_config
 from backend.repositories.books import BookFilterCriteria, BookRepository
 
 
@@ -65,17 +65,13 @@ def parse_args() -> argparse.Namespace:
 
 
 def read_db_config() -> DbConfig:
-    try:
-        return DbConfig(
-            host=os.environ["DEV_MYSQL_HOST"],
-            port=int(os.environ["DEV_MYSQL_PORT"]),
-            user=os.environ["DEV_MYSQL_USER"],
-            password=os.environ["DEV_MYSQL_PASSWORD"],
-        )
-    except KeyError as exc:
-        raise RuntimeError(
-            "Missing DEV_MYSQL_* environment variables for MySQL connection."
-        ) from exc
+    db_settings = runtime_config.load_database_settings()
+    return DbConfig(
+        host=db_settings.host,
+        port=db_settings.port,
+        user=db_settings.user,
+        password=db_settings.password,
+    )
 
 
 def open_admin_connection(config: DbConfig) -> Any:

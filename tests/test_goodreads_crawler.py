@@ -219,13 +219,13 @@ class MySQLConfigTests(unittest.TestCase):
         with patch.dict(
             "os.environ",
             {
-                "DEV_MYSQL_HOST": "db.example",
-                "DEV_MYSQL_PORT": "3306",
-                "DEV_MYSQL_USER": "crawler",
-                "DEV_MYSQL_PASSWORD": "secret",
-                "DEV_MYSQL_DATABASE": "find_me_a_book",
+                "DB_HOST": "db.example",
+                "DB_PORT": "3306",
+                "DB_USER": "crawler",
+                "DB_PASSWORD": "secret",
+                "DB_NAME": "find_me_a_book",
             },
-            clear=False,
+            clear=True,
         ):
             config = resolve_mysql_config(args)
 
@@ -235,7 +235,7 @@ class MySQLConfigTests(unittest.TestCase):
         self.assertEqual(config.password, "secret")
         self.assertEqual(config.database, "find_me_a_book")
 
-    def test_resolve_mysql_config_requires_values(self):
+    def test_resolve_mysql_config_uses_defaults_when_env_is_missing(self):
         args = argparse.Namespace(
             db_host=None,
             db_port=None,
@@ -244,8 +244,13 @@ class MySQLConfigTests(unittest.TestCase):
             db_name=None,
         )
         with patch.dict("os.environ", {}, clear=True):
-            with self.assertRaises(ValueError):
-                resolve_mysql_config(args)
+            config = resolve_mysql_config(args)
+
+        self.assertEqual(config.host, "dev-mysql")
+        self.assertEqual(config.port, 3306)
+        self.assertEqual(config.user, "devagent")
+        self.assertEqual(config.password, "")
+        self.assertEqual(config.database, "dev_find_me_a_book")
 
 
 if __name__ == "__main__":

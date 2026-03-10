@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import argparse
-import os
 import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+import config as runtime_config
 
 @dataclass(frozen=True)
 class DbConnectionParams:
@@ -229,35 +229,17 @@ def setup_database(
 
 def resolve_connection_params(args: argparse.Namespace) -> DbConnectionParams:
     """Resolve connection parameters from args and environment variables."""
-    database = args.database_name or os.environ.get("DEV_MYSQL_DATABASE")
-    host = args.host or os.environ.get("DEV_MYSQL_HOST")
-    user = args.user or os.environ.get("DEV_MYSQL_USER")
-    password = args.password or os.environ.get("DEV_MYSQL_PASSWORD")
-    port_raw = args.port or os.environ.get("DEV_MYSQL_PORT")
-
-    missing_vars: list[str] = []
-    if not database:
-        missing_vars.append("DEV_MYSQL_DATABASE")
-    if not host:
-        missing_vars.append("DEV_MYSQL_HOST")
-    if not user:
-        missing_vars.append("DEV_MYSQL_USER")
-    if not password:
-        missing_vars.append("DEV_MYSQL_PASSWORD")
-    if not port_raw:
-        missing_vars.append("DEV_MYSQL_PORT")
-
-    if missing_vars:
-        joined = ", ".join(missing_vars)
-        raise ValueError(
-            "Missing MySQL connection values. Provide CLI flags or set: "
-            f"{joined}"
-        )
+    db_settings = runtime_config.load_database_settings()
+    database = args.database_name or db_settings.name
+    host = args.host or db_settings.host
+    user = args.user or db_settings.user
+    password = args.password if args.password is not None else db_settings.password
+    port_raw = args.port if args.port is not None else str(db_settings.port)
 
     try:
         port = int(port_raw)
     except ValueError as exc:
-        raise ValueError("DEV_MYSQL_PORT/--port must be an integer.") from exc
+        raise ValueError("DB_PORT/--port must be an integer.") from exc
 
     return DbConnectionParams(
         database=database,
@@ -275,23 +257,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--database-name",
-        help="Target database name. Defaults to DEV_MYSQL_DATABASE.",
+        help="Target database name. Defaults to DB_NAME (or DEV_MYSQL_DATABASE fallback).",
     )
     parser.add_argument(
         "--host",
-        help="MySQL host. Defaults to DEV_MYSQL_HOST.",
+        help="MySQL host. Defaults to DB_HOST (or DEV_MYSQL_HOST fallback).",
     )
     parser.add_argument(
         "--user",
-        help="MySQL user. Defaults to DEV_MYSQL_USER.",
+        help="MySQL user. Defaults to DB_USER (or DEV_MYSQL_USER fallback).",
     )
     parser.add_argument(
         "--password",
-        help="MySQL password. Defaults to DEV_MYSQL_PASSWORD.",
+        help="MySQL password. Defaults to DB_PASSWORD (or DEV_MYSQL_PASSWORD fallback).",
     )
     parser.add_argument(
         "--port",
-        help="MySQL port. Defaults to DEV_MYSQL_PORT.",
+        help="MySQL port. Defaults to DB_PORT (or DEV_MYSQL_PORT fallback).",
     )
     parser.add_argument(
         "--schema-path",

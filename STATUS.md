@@ -2256,3 +2256,43 @@ Bootstrap / install command:
 
 Documentation updates:
 - `README.md` now references `pip install -r requirements.txt` as the canonical environment bootstrap step.
+
+## Task 347 - Introduce centralized configuration module (RUN_ID=630)
+
+Date: 2026-03-10
+
+Summary:
+- Added a new root-level configuration module at `config.py` that centralizes
+  runtime settings for app, database, and crawler concerns.
+- `config.py` now exposes typed settings loaders and module-level attributes
+  for:
+  - `DB_HOST` (default: `dev-mysql`)
+  - `DB_PORT` (default: `3306`)
+  - `DB_NAME` (default: `dev_find_me_a_book`)
+  - `DB_USER` (default: `devagent`)
+  - `DB_PASSWORD` (default: empty string)
+  - `BOOK_SOURCE_BASE_URL` (default: `https://www.goodreads.com`)
+  - `BOOK_SOURCE_API_KEY` (default: `None`)
+  - `CRAWLER_RATE_LIMIT_PER_MIN` (default: `60`)
+- Database settings read `DB_*` first and fall back to `DEV_MYSQL_*` to keep
+  compatibility with existing local tooling.
+
+Refactors completed:
+- `backend/config.py` now delegates environment resolution to root `config.py`.
+- `crawler/goodreads_crawler.py` now imports centralized book source + crawler
+  settings and DB settings instead of reading env vars directly.
+- `db/setup_database.py` now resolves DB connection defaults via root config.
+- `scripts/benchmark_search_performance.py` now reads DB config via root
+  config instead of direct `os.environ` access.
+
+Dev MySQL relationship:
+- Local defaults in `config.py` are aligned with this dev-runner environment:
+  host `dev-mysql`, port `3306`, and database `dev_find_me_a_book`.
+- To override locally or in CI, set `DB_*` variables. Existing
+  `DEV_MYSQL_*` variables continue to work as fallback inputs.
+
+Book source API configuration:
+- `BOOK_SOURCE_BASE_URL` selects the crawler source endpoint.
+- `BOOK_SOURCE_API_KEY` is optional and defaults to `None` (not required for
+  the current Goodreads crawl path, but supported for providers that need a key).
+- `CRAWLER_RATE_LIMIT_PER_MIN` controls crawler request throttling.

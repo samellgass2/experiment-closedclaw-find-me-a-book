@@ -234,8 +234,9 @@ def create_app(config: AppConfig | None = None) -> Flask:
                 age_max is not None,
             )
         )
+        normalized_path = request.path.rstrip("/") or "/"
         strict_legacy_intersection = (
-            request.path == "/api/books"
+            normalized_path == "/api/books"
             and query is None
             and legacy_route_has_filters
         )

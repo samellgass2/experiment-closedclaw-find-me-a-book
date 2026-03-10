@@ -2416,3 +2416,68 @@ PASS: Workflow #35 goals are met. The branch now provides:
 ### Overall Verdict
 
 `PASS`
+
+## Task 366 - Containerization Baseline (Production-Ready Deployment, Config, and Observability Setup)
+
+Date: 2026-03-10  
+RUN_ID: 641  
+TASK_ID: 366
+
+### Summary
+
+Added a production-focused containerization baseline for the Flask backend:
+
+- Added a root `Dockerfile` that builds the app with:
+  - `python:3.12-slim-bookworm`
+  - system build/runtime packages commonly required by Python web stacks
+  - dependency install via `python -m pip install -r requirements.txt`
+  - unprivileged runtime user (`appuser`)
+  - `EXPOSE 8000`
+  - startup command `python -m backend.app`
+- Added root `docker-compose.example.yml` defining:
+  - `app` service built from local `Dockerfile`
+  - `dev-mysql` MariaDB service reachable at `dev-mysql:3306`
+  - app-to-db environment variable wiring (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`)
+  - host port mapping `8000:8000` for the app
+
+### Runtime Configuration
+
+The containerized backend uses environment variables for database runtime config:
+
+- `DB_HOST`
+- `DB_PORT`
+- `DB_NAME`
+- `DB_USER`
+- `DB_PASSWORD`
+
+These are already plumbed into the app through existing configuration loading in
+`config.py` -> `backend/config.py` -> `backend/app.py`.
+
+### Build and Run
+
+Build image:
+
+```bash
+docker build -t find-me-a-book:latest .
+```
+
+Run app container (example):
+
+```bash
+docker run --rm -p 8000:8000 \
+  -e DB_HOST=dev-mysql \
+  -e DB_PORT=3306 \
+  -e DB_NAME=dev_find_me_a_book \
+  -e DB_USER=devagent \
+  -e DB_PASSWORD=devpassword \
+  find-me-a-book:latest
+```
+
+Run app + database with compose example:
+
+```bash
+docker compose -f docker-compose.example.yml up --build
+```
+
+Adjust runtime values by editing environment variables in
+`docker-compose.example.yml` or passing `-e` vars to `docker run`.

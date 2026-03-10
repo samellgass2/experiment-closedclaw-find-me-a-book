@@ -1,0 +1,34 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: find-me-a-book-app
+    depends_on:
+      - dev-mysql
+    environment:
+      DB_HOST: dev-mysql
+      DB_PORT: "3306"
+      DB_NAME: dev_find_me_a_book
+      DB_USER: devagent
+      DB_PASSWORD: devpassword
+      BACKEND_DEBUG: "false"
+      BACKEND_LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+
+  dev-mysql:
+    image: mariadb:11
+    container_name: find-me-a-book-dev-mysql
+    environment:
+      MARIADB_ROOT_PASSWORD: rootpassword
+      MARIADB_DATABASE: dev_find_me_a_book
+      MARIADB_USER: devagent
+      MARIADB_PASSWORD: devpassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - dev-mysql-data:/var/lib/mysql
+
+volumes:
+  dev-mysql-data:

@@ -1,3 +1,53 @@
+# Status Update: Task 303
+
+## Crawler Validation and Smoke Tests
+
+- Added fixture-driven crawler validation module:
+  `tests/test_crawler_validation_smoke.py`.
+- Added offline Goodreads HTML fixtures used by tests:
+  - `tests/fixtures/goodreads/search_result_sample.html`
+  - `tests/fixtures/goodreads/book_detail_sample.html`
+- New validation coverage (no live Goodreads access):
+  - Runs `GoodreadsCrawler` against mocked HTML fetch responses.
+  - Persists parsed records through `MySQLBookRepository.upsert_book(...)`.
+  - Asserts critical crawler-populated fields are mapped into schema tables:
+    - `books.title`
+    - `book_authors -> authors.full_name`
+    - `book_genres -> genres.display_name`
+    - additional attribute coverage via
+      `books.maturity_rating='general'` and subject-bearing description text.
+- Added crawler-to-query smoke path:
+  - inserts a crawled fixture book,
+  - queries through `BookRepository.search(...)` with
+    `BookFilterCriteria(query + genre + age_rating + subject_matter)`,
+  - verifies the crawled title appears in filter/search results.
+- Added mocked CLI-path test for `run_cli(...)` to confirm crawler/repository
+  orchestration works without network or real DB access.
+
+### How To Run Crawler Tests
+
+Run only crawler validation/smoke tests:
+
+```bash
+python -m unittest tests.test_crawler_validation_smoke -v
+```
+
+Run crawler-focused suite:
+
+```bash
+python -m unittest tests.test_goodreads_crawler tests.test_crawler_validation_smoke -v
+```
+
+### Assumptions and Limitations
+
+- Goodreads HTTP calls are fully mocked via offline fixtures to keep tests
+  deterministic and network-independent.
+- Integration parts require MySQL env vars:
+  `DEV_MYSQL_HOST`, `DEV_MYSQL_PORT`, `DEV_MYSQL_USER`,
+  `DEV_MYSQL_PASSWORD`.
+- Tests create and drop an isolated schema named
+  `dev_find_me_a_book_task303_crawler_*` per run.
+
 # Status Update: Task 302
 
 ## Integration Tests for Database Filtering

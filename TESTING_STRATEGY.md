@@ -41,6 +41,22 @@ python -m unittest discover -s tests -p 'test*.py'
 
 If `pytest` is unavailable, `unittest` is the minimum required gate.
 
+Database bootstrap before running MySQL integration modules in a clean env:
+```bash
+export DEV_MYSQL_HOST=dev-mysql
+export DEV_MYSQL_PORT=3306
+export DEV_MYSQL_USER=devagent
+export DEV_MYSQL_PASSWORD=...
+export DEV_MYSQL_DATABASE=dev_find_me_a_book
+python db/setup_database.py
+```
+
+Focused filtering integration run:
+```bash
+python -m pytest tests/test_integration_filtering.py -q
+python -m unittest tests.test_integration_filtering
+```
+
 ## Test Directory Conventions
 - Keep all tests under `tests/`.
 - Naming:
@@ -80,6 +96,7 @@ Target modules:
 - `tests/test_books_api.py`
 - `tests/test_relevance_ranking.py`
 - `tests/test_mysql_setup_validation.py`
+- `tests/test_integration_filtering.py`
 
 Critical behaviors:
 - Migrations create required schema and search indexes used by repository SQL.
@@ -89,6 +106,10 @@ Critical behaviors:
   (including legacy `/api/books` behavior and strict intersections).
 - Setup validation verifies DB connectivity, active schema, and required table
   presence.
+- Filtering integration coverage seeds crawler-like rows (`source_provider`,
+  `external_source_id`, `description`, `maturity_rating`, and linked genres)
+  and validates that genre, age, spice-level, subject, and combined criteria
+  return exact expected subsets through repository query paths.
 
 ### 3) Crawler Validation (Parser + Persistence)
 Target modules:

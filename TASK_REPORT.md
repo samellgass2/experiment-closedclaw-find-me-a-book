@@ -1,45 +1,56 @@
 # TASK REPORT
 
 ## Task
-- TASK_ID: 301
-- RUN_ID: 527
-- Title: Add unit tests for filtering and utilities
+- TASK_ID: 302
+- RUN_ID: 530
+- Title: Implement integration tests for database filtering
 
 ## Summary of Work
-- Added a dedicated unit test module:
-  - `tests/test_books_repository_filtering_units.py`
-- Implemented focused unit coverage for filtering/query behavior in:
-  - `backend/repositories/books.py::BookRepository.search`
-- Implemented utility unit coverage for:
-  - `backend/repositories/books.py::_to_boolean_prefix_query`
-  - `backend/repositories/books.py::_is_timeout_error`
-- Updated `STATUS.md` with a Task 301 section describing coverage and the exact command used to run unit tests.
+- Added a dedicated integration test module:
+  - `tests/test_integration_filtering.py`
+- New tests provision an isolated MySQL schema using the existing setup path:
+  - `db.setup_database.setup_database(...)`
+  - schema/migrations from `db/schema.sql` and `db/migrations/*.sql`
+- Seeded representative fixture books through real schema tables (`books`,
+  `authors`, `genres`, `book_authors`, `book_genres`) with crawler-like fields:
+  - `source_provider='goodreads'`
+  - `external_source_id`
+  - `description`
+  - `maturity_rating`
+- Added integration assertions for filtering combinations through production
+  query layer code paths:
+  - `BookRepository.search(...)`
+  - `search_books_by_criteria(...)`
+- Updated docs:
+  - `TESTING_STRATEGY.md` with clean-environment DB setup and focused test run commands.
+  - `STATUS.md` with Task 302 coverage scope, schema dependencies, and limitations.
 
 ## Acceptance Coverage
-1. Dedicated unit test module exists under `tests/` and imports real repository code.
-2. Added tests for:
-   - single genre filter,
-   - combined criteria (genre + age rating),
-   - empty filters,
-   - invalid filters (unsupported age rating ignored).
-3. Tests assert positive and negative outcomes using realistic in-memory sample books.
-4. Unit suite command runs successfully in this environment.
-5. `STATUS.md` now documents covered filtering utilities and exact run command.
+1. New integration module exists and uses real DB schema setup via `setup_database`.
+2. Tests seed a known fixture set and validate filter subset correctness.
+3. Tests assert filtering behavior over crawler-populated/equivalent fields
+   (`description`, `maturity_rating`, linked genre data, and Goodreads source ids).
+4. Documented setup/test commands align with repo test runner strategy and pass in this environment.
+5. `STATUS.md` updated with scope and known assumptions/risks.
 
 ## Validation / Test Execution
 Commands run:
-1. `python -m unittest tests.test_books_repository_filtering_units -v`
+1. `python -m unittest tests.test_integration_filtering -v`
 2. `python -m unittest discover -s tests -p 'test*.py'`
 
+Environment used during runs:
+- `DEV_MYSQL_HOST=dev-mysql`
+- `DEV_MYSQL_PORT=3306`
+- `DEV_MYSQL_USER=devagent`
+- `DEV_MYSQL_PASSWORD=<provided in task env>`
+- `DEV_MYSQL_DATABASE=dev_find_me_a_book`
+
 Observed results:
-- New module: `Ran 9 tests ... OK`
-- Full suite: `Ran 62 tests in 0.450s` and `OK (skipped=23)`
+- New module: `Ran 5 tests ... OK`
+- Full suite: `Ran 67 tests in 0.843s` and `OK (skipped=23)`
 
 ## Files Changed
-- `tests/test_books_repository_filtering_units.py` (new)
+- `tests/test_integration_filtering.py` (new)
+- `TESTING_STRATEGY.md` (updated)
 - `STATUS.md` (updated)
 - `TASK_REPORT.md` (updated for this run)
-
-## Commit
-- `24a2beb`
-- `task/301: add unit tests for repository filtering utilities`

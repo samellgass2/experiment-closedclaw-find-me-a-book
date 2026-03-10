@@ -1,3 +1,42 @@
+# Status Update: Task 302
+
+## Integration Tests for Database Filtering
+
+- Added a new MySQL integration module:
+  `tests/test_integration_filtering.py`.
+- The new tests create an isolated schema via `db/setup_database.setup_database`
+  using real migration files in `db/migrations/`.
+- Seeded fixture rows mimic crawler-ingested books by populating:
+  - `books.source_provider='goodreads'`
+  - `books.external_source_id`
+  - `books.description`
+  - `books.maturity_rating`
+  - linked `book_genres` and `book_authors` rows.
+- Added integration assertions that run through production query paths:
+  - `BookRepository.search(...)`
+  - `search_books_by_criteria(...)`
+- Covered filtering behaviors:
+  - genre + age range intersections
+  - spice level to maturity mapping
+  - subject filtering against `description` (not title-only matches)
+  - combined criteria (query + genre + age rating + subject/plot/character).
+
+### Schema and Runtime Assumptions
+
+- Tests rely on MySQL connectivity via `DEV_MYSQL_HOST`, `DEV_MYSQL_PORT`,
+  `DEV_MYSQL_USER`, and `DEV_MYSQL_PASSWORD`.
+- Test setup provisions and drops an ephemeral database per run
+  (`dev_find_me_a_book_task302_filter_*`).
+- The setup path depends on local `mysql` and `mysqladmin` binaries because it
+  calls `db/setup_database.py` utilities.
+
+### Known Limitations / Flakiness Risks
+
+- Tests are skipped when required MySQL environment variables are missing.
+- Runs will fail if the configured MySQL user cannot create/drop databases.
+- Timing-based schema naming is stable for local serial runs, but concurrent
+  runs on the same millisecond would collide (low likelihood).
+
 # Status Update: Task 300
 
 ## Testing Audit and Strategy Baseline

@@ -1679,3 +1679,71 @@ Validation: `PASS`
   - Relevance-score ordering behavior when criteria are present.
   - Weight-priority shape in generated relevance expression.
 
+
+# Tester Report: Workflow #25 (2026-03-10, run 2)
+
+## Tests Run and Results
+1. `python -m pytest tests/ -q`
+- Initial result: FAIL (`No module named pytest`)
+
+2. `pytest tests/ -q`
+- Initial result: FAIL (`pytest: command not found`)
+
+3. `python -m unittest discover`
+- Initial result: FAIL (`Ran 0 tests` / `NO TESTS RAN`)
+
+4. Installed test dependencies:
+- Command: `python -m pip install -q pytest Flask PyMySQL`
+- Result: PASS
+
+5. `python -m pytest tests/ -q`
+- Result: PASS
+- Output summary: `57 passed in 2.89s`
+
+6. `cd frontend && npm test --silent`
+- Result: PASS
+- Output summary: `3 passed, 0 failed`
+
+7. DB-backed full suite:
+- Command: `DEV_MYSQL_HOST=dev-mysql DEV_MYSQL_PORT=3306 DEV_MYSQL_USER=devagent DEV_MYSQL_PASSWORD=*** DEV_MYSQL_DATABASE=dev_find_me_a_book python -m pytest tests/ -q`
+- Result: PASS
+- Output summary: `57 passed in 1.31s`
+
+8. Performance benchmark:
+- Command: `DEV_MYSQL_HOST=dev-mysql DEV_MYSQL_PORT=3306 DEV_MYSQL_USER=devagent DEV_MYSQL_PASSWORD=*** python scripts/benchmark_search_performance.py --iterations 3 --warmup 1 --seed-size 200 --budget-ms 400`
+- Result: PASS
+- Output summary: all benchmark scenarios passed budget; p95 max observed `10.35ms`
+
+## Per-Task Acceptance Verdict
+- Task #271: PASS
+  - `backend/filters.py` defines `BookFilterCriteria` with required filter fields.
+  - Query builder returns parameterized SQL + params; criteria are conditionally applied.
+  - Relevance ordering prioritizes genre/age rating over lower-weight criteria.
+  - Unit tests cover filter application and relevance ordering behavior.
+  - STATUS contains model/query and relevance documentation.
+
+- Task #272: PASS
+  - Flask routes exist: `/api/books`, `/api/books/search`, `/search`.
+  - Endpoint maps `q`, `genre`, `age_rating`, `subject_matter`, `plot_points`, `character_dynamics`, `spice_level` into `BookFilterCriteria`.
+  - Responses return JSON book records with at least `id`, `title`, `author`.
+  - Multi-filter subset/monotonic behavior is covered by integration tests.
+  - Invalid filter values return structured 400 JSON errors.
+  - API-level tests cover simple q search, multi-filter search, and invalid params.
+  - STATUS documents routes, params, and response examples.
+
+- Task #273: PASS
+  - Reproducible benchmark script exists and executes timed multi-filter searches.
+  - Index migration exists in `db/migrations/002_search_indexes.sql`.
+  - Query/perf tuning rationale is documented in backend query module and STATUS.
+  - Relevance tests verify stronger matches rank higher and spice-level can change top result.
+  - STATUS includes performance profile, index/tuning notes, and scoring rationale.
+
+## Bugs Filed
+- None.
+
+## Integration/Regression Assessment
+- Tasks #271, #272, and #273 operate cohesively.
+- No regressions were observed in backend or frontend test suites.
+
+## Overall Verdict
+- `CLEAN`

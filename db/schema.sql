@@ -48,6 +48,9 @@ CREATE TABLE IF NOT EXISTS books (
     external_source_id
   ),
   INDEX ix_books_title (title(255)),
+  INDEX ix_books_maturity_updated_id (maturity_rating, updated_at, id),
+  INDEX ix_books_updated_id (updated_at, id),
+  FULLTEXT KEY ftx_books_title_description (title, description),
   INDEX ix_books_publication_date (publication_date),
   INDEX ix_books_average_rating (average_rating),
   CONSTRAINT chk_books_isbn_10 CHECK (
@@ -79,6 +82,7 @@ CREATE TABLE IF NOT EXISTS authors (
     ON UPDATE CURRENT_TIMESTAMP(3),
   PRIMARY KEY (id),
   UNIQUE KEY ux_authors_full_name (full_name(255)),
+  INDEX ix_authors_full_name_prefix (full_name(255)),
   INDEX ix_authors_sort_name (sort_name(255))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -92,6 +96,7 @@ CREATE TABLE IF NOT EXISTS genres (
   PRIMARY KEY (id),
   UNIQUE KEY ux_genres_code (code),
   UNIQUE KEY ux_genres_display_name (display_name),
+  INDEX ix_genres_lookup (code, display_name),
   CONSTRAINT chk_genres_code CHECK (code REGEXP '^[a-z0-9-]+$')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -183,6 +188,7 @@ CREATE TABLE IF NOT EXISTS book_genres (
   updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
     ON UPDATE CURRENT_TIMESTAMP(3),
   PRIMARY KEY (book_id, genre_id),
+  INDEX ix_book_genres_book_id (book_id),
   INDEX ix_book_genres_genre_id (genre_id, book_id),
   CONSTRAINT fk_book_genres_book
     FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,

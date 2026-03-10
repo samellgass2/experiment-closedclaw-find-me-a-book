@@ -51,16 +51,14 @@ class BookRepositoryFilterQueryTests(unittest.TestCase):
         books = repository.list_books(filters={"genre": "fantasy"})
 
         self.assertEqual(len(books), 1)
+        self.assertIn("WITH candidate_books AS", connection._cursor.executed_sql)
         self.assertIn("EXISTS (", connection._cursor.executed_sql)
         self.assertIn(
-            "LOWER(filter_g.code) = LOWER(%s)",
+            "filter_g.code = %s",
             connection._cursor.executed_sql,
         )
         self.assertNotIn("fantasy", connection._cursor.executed_sql)
-        self.assertEqual(
-            connection._cursor.executed_params[-3:-1],
-            ("fantasy", "fantasy"),
-        )
+        self.assertEqual(connection._cursor.executed_params[:4], ("fantasy",) * 4)
         self.assertEqual(connection._cursor.executed_params[-1], 20)
 
     def test_search_books_combines_query_and_filters_conjunctively(self) -> None:
@@ -78,13 +76,16 @@ class BookRepositoryFilterQueryTests(unittest.TestCase):
 
         sql = connection._cursor.executed_sql
         params = connection._cursor.executed_params
+        self.assertIn("WITH candidate_books AS", sql)
         self.assertIn("b.title LIKE %s", sql)
         self.assertIn("LOWER(b.description) LIKE LOWER(%s)", sql)
+        self.assertIn("MATCH(b.title, b.description)", sql)
         self.assertIn("b.maturity_rating = %s", sql)
-        self.assertEqual(params[0:3], ("%story%", "%story%", "%story%"))
-        self.assertEqual(params[3:5], ("fantasy", "fantasy"))
-        self.assertEqual(params[5], "%friendship%")
-        self.assertEqual(params[6], "general")
+        self.assertEqual(params[0], "story")
+        self.assertIn("%story%", params)
+        self.assertIn("+story*", params)
+        self.assertIn("general", params)
+        self.assertEqual(params[-1], 20)
 
     def test_list_books_applies_age_range_filters(self) -> None:
         connection = FakeConnection(rows=[_sample_row()])

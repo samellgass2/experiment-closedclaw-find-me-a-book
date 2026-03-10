@@ -1,3 +1,77 @@
+# Status Update: Task 272
+
+## Advanced Search API Filtering and Relevance Ranking
+
+- Extended the Flask search API in `backend/app.py` while preserving existing
+  `GET /api/books` behavior.
+- Added search route aliases:
+  - `GET /api/books`
+  - `GET /api/books/search`
+  - `GET /search`
+- Added advanced query parameter parsing and validation, and mapped request
+  values into query-layer `BookFilterCriteria` in
+  `backend/repositories/books.py`.
+- Search now supports these parameters:
+  - `q` (free-text query)
+  - `genre`
+  - `age_rating` (`general|kids|teen|ya|mature|adult`)
+  - `subject_matter` (comma-separated and/or repeated values)
+  - `plot_points` (comma-separated and/or repeated values)
+  - `character_dynamics` (comma-separated and/or repeated values)
+  - `spice_level` (`low|medium|high`)
+  - Backward-compatible legacy params retained: `subject`, `age_min`, `age_max`
+- Added graceful failures:
+  - `400` JSON for invalid parameters.
+  - `504` JSON when repository raises query-timeout errors.
+  - `500` JSON for non-timeout repository failures.
+- Implemented explicit relevance ordering in query SQL:
+  - query-title exact and partial matches are weighted highest,
+  - then author/description matches,
+  - then deterministic tie-breakers (`updated_at`, `id`).
+
+### Response Format
+
+Search endpoints return a JSON array ordered by backend relevance logic when
+`q` is provided:
+
+- `id`
+- `title`
+- `author`
+- `summary`
+- `description`
+- `genre`
+- `age_rating`
+- `spice_level`
+- `subject_matter`
+- `plot_points`
+- `character_dynamics`
+
+### Example Request
+
+```bash
+curl -s "http://localhost:8000/api/books/search?q=starlight&genre=Fantasy&age_rating=YA&subject_matter=friendship,magic&plot_points=quest&character_dynamics=found-family&spice_level=low"
+```
+
+### Example Response
+
+```json
+[
+  {
+    "id": 101,
+    "title": "Starlight Friends",
+    "author": "Alex Lantern",
+    "summary": "A friendship quest beneath a comet.",
+    "description": "A friendship quest beneath a comet.",
+    "genre": "Fantasy",
+    "age_rating": "general",
+    "spice_level": "low",
+    "subject_matter": [],
+    "plot_points": [],
+    "character_dynamics": []
+  }
+]
+```
+
 # Status Update: Task 266
 
 ## Frontend Search, Filter UI, and API Integration
@@ -1320,3 +1394,172 @@ Result:
 ## Overall Verdict
 
 `CLEAN`
+
+# Status Update: Task 273
+
+## Advanced Book Filtering: Performance and Relevance
+
+### What Changed
+
+- Refactored `backend/repositories/books.py` search SQL to use a
+  `candidate_books` CTE that applies filtering, relevance ordering, and `LIMIT`
+  before building author/genre display aggregates.
+- Added weighted relevance signals across all advanced criteria dimensions:
+  - query/title/author/fulltext text match
+  - genre match
+  - age rating match
+  - spice-level (maturity) match
+  - subject matter token frequency in description
+  - plot-point token frequency in description
+  - character-dynamics token frequency in description
+- Added inline query-builder documentation in `BookRepository._build_books_query`
+  describing why the CTE structure is used (based on EXPLAIN behavior).
+
+### Indexing and Query-Tuning
+
+- Added migration: `db/migrations/002_search_indexes.sql`
+- Added/ensured the following indexes for hot search paths:
+  - `books`: `ix_books_maturity_updated_id`, `ix_books_updated_id`
+  - `books`: `ftx_books_title_description` FULLTEXT on `(title, description)`
+    for ranked text search and subject-matter-oriented matching
+  - `authors`: `ix_authors_full_name_prefix`
+  - `genres`: `ix_genres_lookup`
+  - `book_genres`: `ix_book_genres_book_id`
+- Mirrored these index definitions in `db/schema.sql` for full schema snapshots.
+
+### Relevance Strategy (Current Weights)
+
+- Exact title match: `160`
+- Title prefix match: `100`
+- Title contains match: `55`
+- Author contains match: `45`
+- FULLTEXT query match (`title`,`description`): `80`
+- Genre match: `30`
+- Age rating match: `22`
+- Spice-level match: `18`
+- Subject-matter occurrence multiplier: up to `3 * 10`
+- Plot-point occurrence multiplier: up to `3 * 8`
+- Character-dynamics occurrence multiplier: up to `3 * 7`
+
+Notes:
+- Scalar filters remain hard constraints (conjunctive filtering behavior is
+  preserved).
+- Token-frequency boosts differentiate stronger matches among already valid rows.
+
+### Performance Checks (Reproducible)
+
+Run:
+
+```bash
+DEV_MYSQL_HOST=dev-mysql \
+DEV_MYSQL_PORT=3306 \
+DEV_MYSQL_USER=devagent \
+DEV_MYSQL_PASSWORD=<password> \
+python scripts/benchmark_search_performance.py --seed-size 1200 --iterations 8 --warmup 2 --budget-ms 400
+```
+
+Measured on 2026-03-10 (UTC) with seeded dataset size `1200`:
+
+- `fantasy-low-spice`: mean `68.32ms`, p95 `71.77ms`
+- `scifi-teen`: mean `71.52ms`, p95 `74.56ms`
+- `romance-high`: mean `70.45ms`, p95 `75.02ms`
+- `browse-mystery`: mean `11.72ms`, p95 `13.32ms`
+
+All benchmark scenarios passed the configured p95 budget (`<= 400ms`).
+EXPLAIN output showed index usage including:
+`ix_books_maturity_updated_id`, `ix_books_updated_id`,
+`ix_book_genres_book_id`, and `ix_genres_lookup`.
+
+### New/Updated Test Coverage
+
+- Added integration relevance tests in `tests/test_relevance_ranking.py`:
+  - stronger multi-criteria matches rank above weaker matches
+  - changing `spice_level` changes the top result as expected
+- Updated existing query-shape tests in
+  `tests/test_books_repository_filters.py` for the CTE-based SQL builder.
+- Updated migration application in `tests/test_books_api.py` to apply all
+  migration files (not just `001_init.sql`) so search/index behavior remains
+  representative.
+
+### Verification Commands
+
+- `python -m unittest discover tests -q`
+- `DEV_MYSQL_HOST=dev-mysql DEV_MYSQL_PORT=3306 DEV_MYSQL_USER=devagent DEV_MYSQL_PASSWORD=<password> DEV_MYSQL_DATABASE=dev_find_me_a_book python -m unittest tests.test_relevance_ranking -q`
+- `DEV_MYSQL_HOST=dev-mysql DEV_MYSQL_PORT=3306 DEV_MYSQL_USER=devagent DEV_MYSQL_PASSWORD=<password> python scripts/benchmark_search_performance.py --seed-size 1200 --iterations 8 --warmup 2 --budget-ms 400`
+
+Result: `PASS`
+
+# Tester Report: Workflow #25 (2026-03-10)
+
+## Scope
+- Project: `find-me-a-book`
+- Branch: `workflow/25/dev`
+- Verified tasks: #271, #272, #273
+
+## Tests Run and Results
+
+1. Command: `python -m pytest tests/ -q`
+- Result: FAIL
+- Output: `/usr/local/bin/python: No module named pytest`
+
+2. Command: `pytest tests/ -q`
+- Result: FAIL
+- Output: `/bin/bash: line 1: pytest: command not found`
+
+3. Command: `python -m unittest discover`
+- Result: FAIL (runner executed but discovered no tests)
+- Output: `Ran 0 tests ... NO TESTS RAN`
+
+4. Command: `python -m unittest discover -s tests -v` (before installing Flask)
+- Result: PASS with skips
+- Output summary: `Ran 53 tests in 0.585s`, `OK (skipped=23)`
+
+5. Command: `python -m pip install -r requirements.txt`
+- Result: PASS
+- Notes: Installed Flask and dependencies; PyMySQL already present.
+
+6. Command: `python -m unittest discover -s tests -v` (after installing Flask)
+- Result: FAIL
+- Output summary: `Ran 53 tests in 0.776s`, `FAILED (failures=2)`
+- Failing tests:
+  - `tests/test_books_api.py::BooksApiIntegrationTests::test_filter_by_genre`
+  - `tests/test_books_api.py::BooksApiIntegrationTests::test_combined_filters_return_intersection`
+- Failure detail (both): response includes extra title `Moonlit Bonds [task244_<timestamp>]` where only `Starlight Friends [task244_<timestamp>]` is expected.
+
+7. Command: `python scripts/benchmark_search_performance.py --iterations 5 --warmup 1 --seed-size 400 --budget-ms 350`
+- Result: PASS
+- Output summary: all benchmark scenarios under budget; p95 max observed `16.84ms`.
+
+## Per-Task Acceptance Verdict
+
+- Task #271 (backend filtering data model/query layer): PASS
+  - `BookFilterCriteria` present in `backend/repositories/books.py` with required fields.
+  - Query builder uses parameterized SQL placeholders (`%s`) and returns SQL+params.
+  - Optional criteria are conditionally applied; null/empty values are not forced.
+  - Relevance scoring terms are implemented and tested (`tests/test_books_repository_filters.py`, `tests/test_relevance_ranking.py`).
+  - STATUS includes query utility/relevance documentation (in current task update sections).
+
+- Task #272 (search API endpoint exposure): FAIL
+  - Endpoint/routes and parameter mapping exist and are covered by API tests.
+  - Error handling for invalid values and timeout paths exists.
+  - Regression detected in integration behavior for `/api/books` filter intersection:
+    - `genre` filter result set broader than expected test contract.
+    - combined filters return extra row when strict intersection is expected.
+
+- Task #273 (performance/relevance optimization): PASS
+  - Reproducible performance benchmark script exists and runs.
+  - Search index migration exists (`db/migrations/002_search_indexes.sql`).
+  - Query builder includes EXPLAIN-driven CTE rationale comments.
+  - Relevance ranking tests verify stronger multi-criteria ranking and spice-level top-result changes.
+  - STATUS includes performance profile, indexing, and relevance strategy.
+
+## Integration Issues
+- Tasks #271/#273 logic is wired into #272 API routes, but `/api/books` backward-compatibility behavior is not fully preserved under filter intersections.
+- This manifests as over-broad responses in two API integration tests.
+
+## Bugs Filed
+- `Legacy /api/books filtering returns over-broad results for genre intersections` (related task: #272)
+- `Combined /api/books filters do not enforce expected strict intersection` (related task: #272)
+
+## Overall Verdict
+- `BUGS_FILED`

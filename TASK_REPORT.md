@@ -1,32 +1,67 @@
-# Task Report: TASK_ID 267
+# Task Report: TASK_ID=273 RUN_ID=473
 
 ## Summary
-Implemented a minimal frontend test suite for search and filter behavior and made the frontend app wiring testable without adding external test libraries.
+Implemented performance tuning and validation for advanced book filtering and
+relevance ranking in the search query layer.
 
-## Changes Made
-- Refactored `frontend/main.js`:
-  - Added `createSearchApp(...)` for dependency-injected, testable search/filter behavior.
-  - Added `initializeSearchApp(...)` to wire DOM elements in browser runtime.
-  - Kept automatic browser initialization (`initializeSearchApp()` when `document` exists).
-- Added `frontend/tests/search_filters.test.js` with 3 high-value tests:
-  - search input + submit button interaction and query propagation to API client,
-  - filter change propagation into API request params,
-  - results list/status updates when API response data changes.
-- Added `frontend/package.json` to run frontend tests via Node built-in test runner.
-- Updated `STATUS.md` with test coverage summary and run instructions.
+## Delivered Changes
 
-## Test Commands and Results
-1. `cd frontend && npm test`
-   - PASS (3/3 frontend tests)
-2. `python -m unittest discover tests`
-   - PASS (`Ran 46 tests`, `OK`, `skipped=18`)
-3. `python -m pytest tests/ -q`
-   - Not available in environment (`No module named pytest`)
+- Refactored `backend/repositories/books.py` query generation:
+  - Added `candidate_books` CTE to filter/order/limit before heavy aggregation.
+  - Expanded weighted relevance scoring across query text, genre, age rating,
+    spice level, subject matter, plot points, and character dynamics.
+  - Added query-level comment explaining the EXPLAIN-driven CTE choice.
+- Added migration `db/migrations/002_search_indexes.sql` for search-path
+  indexes including FULLTEXT on `(books.title, books.description)`.
+- Updated `db/schema.sql` to include the same index definitions.
+- Added reproducible benchmark script:
+  - `scripts/benchmark_search_performance.py`
+  - Creates temp schema, applies migrations, seeds representative data,
+    benchmarks multiple filter/query combinations, checks p95 budget,
+    and prints EXPLAIN-derived index usage.
+- Added ranking integration tests:
+  - `tests/test_relevance_ranking.py`
+  - Validates stronger multi-criteria matches rank above weaker matches.
+  - Validates changing `spice_level` changes top result.
+- Updated query-shape tests (`tests/test_books_repository_filters.py`) to match
+  CTE-based SQL.
+- Updated migration usage in API integration setup (`tests/test_books_api.py`)
+  to apply all migrations.
+- Updated `STATUS.md` with performance profile, indexing actions, and relevance
+  weight rationale.
 
 ## Acceptance Criteria Mapping
-1. New frontend test file: PASS (`frontend/tests/search_filters.test.js`)
-2. Search input/button interaction test: PASS
-3. Filter change updates API params test: PASS
-4. Results update test for changed data: PASS
-5. Documented test command runs successfully: PASS (`cd frontend && npm test`)
-6. STATUS.md updated with run instructions and coverage: PASS
+
+1. Reproducible performance checks:
+   - `scripts/benchmark_search_performance.py` added and runnable.
+2. Index migration/documentation:
+   - `db/migrations/002_search_indexes.sql` added with key filter indexes.
+3. EXPLAIN-informed tuning and docs:
+   - query refactor in `backend/repositories/books.py` + inline rationale.
+4. Relevance tests and spice-level top-result change:
+   - `tests/test_relevance_ranking.py` added with both assertions.
+5. Status documentation:
+   - `STATUS.md` updated with timings, index changes, and scoring rationale.
+
+## Validation Run
+
+Commands executed:
+
+```bash
+python -m unittest discover tests -q
+DEV_MYSQL_HOST=dev-mysql DEV_MYSQL_PORT=3306 DEV_MYSQL_USER=devagent DEV_MYSQL_PASSWORD=*** DEV_MYSQL_DATABASE=dev_find_me_a_book python -m unittest tests.test_relevance_ranking -q
+DEV_MYSQL_HOST=dev-mysql DEV_MYSQL_PORT=3306 DEV_MYSQL_USER=devagent DEV_MYSQL_PASSWORD=*** python scripts/benchmark_search_performance.py --seed-size 1200 --iterations 8 --warmup 2 --budget-ms 400
+```
+
+Observed benchmark profile (seed=1200):
+
+- fantasy-low-spice: p95 71.77ms
+- scifi-teen: p95 74.56ms
+- romance-high: p95 75.02ms
+- browse-mystery: p95 13.32ms
+
+All measured queries passed p95 budget <= 400ms.
+
+## Commit
+
+`6f6a35b` `task/273: optimize search ranking, indexing, and performance validation`

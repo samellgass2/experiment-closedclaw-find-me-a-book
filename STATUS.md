@@ -2494,3 +2494,66 @@ Adjust runtime values by editing environment variables in
 
 See [CONFIGURATION.md](CONFIGURATION.md) for supported environment variables,
 default values, and environment-specific examples.
+
+## Task 368 - Health, readiness, and logging instrumentation
+
+Date: 2026-03-10  
+RUN_ID: 646  
+TASK_ID: 368
+
+### Backend Endpoint Contracts
+
+- `GET /health`
+  - Always returns `200` with a compact JSON payload for operational health
+    reporting.
+  - Response fields:
+    - `status`: `ok` when DB probe succeeds, otherwise `degraded`
+    - `service`: backend service identifier
+    - `database.status`: `up` or `down`
+    - `migration_version`: migration version string when discoverable, else
+      `null`
+    - `migration_status`: `available` when migration version is present,
+      otherwise `unknown`
+  - Probe behavior is lightweight and deterministic:
+    - Executes `SELECT 1`
+    - Uses short DB connect/read/write timeouts
+    - Uses metadata queries only (`information_schema`) for migration discovery
+
+- `GET /ready`
+  - Returns `200` only when the app can connect to the configured MySQL
+    database.
+  - Returns `503` when DB connectivity is unavailable.
+  - Intended for container/orchestrator readiness probes.
+
+### Logging Behavior
+
+Flask backend logging is now standardized to structured JSON logs on stdout.
+Each log line includes timestamp, level, logger name, and message. Request logs
+also include:
+
+- `method`
+- `path`
+- `status_code`
+- `duration_ms`
+
+Unhandled exceptions are logged with `exception_type` and stack traces.
+
+### Log Verbosity Controls
+
+Log verbosity is environment-driven and does not require code changes.
+Supported environment variables (precedence order):
+
+1. `BACKEND_LOG_LEVEL`
+2. `LOG_LEVEL`
+3. profile default (`INFO` for development/production, `WARNING` for test)
+
+Examples:
+
+- `BACKEND_LOG_LEVEL=DEBUG`
+- `LOG_LEVEL=ERROR` (used when `BACKEND_LOG_LEVEL` is unset)
+
+### Validation
+
+- Full tests executed:
+  - `. .qa-venv/bin/activate && python -m pytest tests/ -q`
+  - Result: `96 passed`

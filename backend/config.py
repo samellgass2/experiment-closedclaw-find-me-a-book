@@ -141,6 +141,7 @@ class BaseEnvironmentConfig:
         log_level = _read_env_string(
             environ,
             "BACKEND_LOG_LEVEL",
+            fallback_name="LOG_LEVEL",
             default=self.default_log_level,
         ).upper()
         return AppConfig(

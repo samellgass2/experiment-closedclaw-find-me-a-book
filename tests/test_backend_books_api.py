@@ -1,11 +1,12 @@
 import unittest
 from importlib.util import find_spec
+import logging
 from unittest.mock import patch
 
 FLASK_AVAILABLE = find_spec("flask") is not None
 
 if FLASK_AVAILABLE:
-    from backend.app import create_app
+    from backend.app import HealthProbeResult, create_app
     from backend.config import AppConfig, DatabaseConfig, ExternalServiceConfig
     from backend.repositories.books import (
         BookFilterCriteria,
@@ -258,6 +259,78 @@ class BooksApiRouteTests(unittest.TestCase):
             self.app.config["DATABASE_CONFIG"],
             criteria=BookFilterCriteria(query="test"),
         )
+
+    @patch("backend.app._run_health_probe")
+    def test_health_reports_db_and_migration_fields(self, probe_mock) -> None:
+        probe_mock.return_value = HealthProbeResult(
+            db_connected=True,
+            migration_version="003_book_taxonomy_fields",
+        )
+
+        response = self.client.get("/health")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["database"]["status"], "up")
+        self.assertEqual(payload["migration_version"], "003_book_taxonomy_fields")
+        self.assertEqual(payload["migration_status"], "available")
+
+    @patch("backend.app._run_health_probe")
+    def test_ready_returns_200_when_db_is_available(self, probe_mock) -> None:
+        probe_mock.return_value = HealthProbeResult(
+            db_connected=True,
+            migration_version=None,
+        )
+
+        response = self.client.get("/ready")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["status"], "ready")
+
+    @patch("backend.app._run_health_probe")
+    def test_ready_returns_503_when_db_is_unavailable(self, probe_mock) -> None:
+        probe_mock.return_value = HealthProbeResult(
+            db_connected=False,
+            migration_version=None,
+        )
+
+        response = self.client.get("/ready")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.get_json()["status"], "not_ready")
+
+    @patch("backend.app._run_health_probe")
+    def test_request_log_contains_method_path_and_status(self, probe_mock) -> None:
+        probe_mock.return_value = HealthProbeResult(
+            db_connected=True,
+            migration_version=None,
+        )
+
+        captured_records: list[logging.LogRecord] = []
+
+        class _CaptureHandler(logging.Handler):
+            def emit(self, record: logging.LogRecord) -> None:
+                captured_records.append(record)
+
+        backend_logger = logging.getLogger("backend.app")
+        handler = _CaptureHandler()
+        backend_logger.addHandler(handler)
+        try:
+            self.client.get("/health")
+        finally:
+            backend_logger.removeHandler(handler)
+
+        request_logs = [
+            record
+            for record in captured_records
+            if getattr(record, "event", "") == "http_request"
+        ]
+        self.assertTrue(request_logs)
+        request_record = request_logs[-1]
+        self.assertEqual(getattr(request_record, "method", None), "GET")
+        self.assertEqual(getattr(request_record, "path", None), "/health")
+        self.assertEqual(getattr(request_record, "status_code", None), 200)
 
 
 if __name__ == "__main__":

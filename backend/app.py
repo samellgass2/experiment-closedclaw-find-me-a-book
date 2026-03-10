@@ -2,11 +2,26 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import sys
+import time
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
-from flask import Flask, abort, jsonify, request, send_from_directory
+import pymysql
+from flask import (
+    Flask,
+    abort,
+    g,
+    got_request_exception,
+    jsonify,
+    request,
+    send_from_directory,
+)
+from flask.wrappers import Response
 
 from .config import AppConfig, load_app_config
 from .repositories.books import (
@@ -23,13 +38,144 @@ MIN_SUPPORTED_AGE = 0
 MAX_SUPPORTED_AGE = 120
 SUPPORTED_SPICE_LEVELS = frozenset({"low", "medium", "high"})
 MAX_LIST_FILTER_TERMS = 10
+HEALTHCHECK_CONNECT_TIMEOUT_SECONDS = 2
+HEALTHCHECK_QUERY_TIMEOUT_SECONDS = 2
+STANDARD_LOG_RECORD_FIELDS = frozenset(
+    logging.makeLogRecord({}).__dict__.keys()
+)
+
+
+@dataclass(frozen=True)
+class HealthProbeResult:
+    """Result payload for database and migration metadata probes."""
+
+    db_connected: bool
+    migration_version: str | None
+
+
+class JsonLogFormatter(logging.Formatter):
+    """Formatter that emits one-line JSON log records."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        payload: dict[str, Any] = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+
+        for key, value in record.__dict__.items():
+            if key in STANDARD_LOG_RECORD_FIELDS or key.startswith("_"):
+                continue
+            payload[key] = value
+
+        if record.exc_info:
+            payload["exception"] = self.formatException(record.exc_info)
+
+        return json.dumps(payload, separators=(",", ":"), default=str)
 
 
 def _configure_logging(log_level: str) -> None:
-    logging.basicConfig(
-        level=getattr(logging, log_level, logging.INFO),
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    numeric_level = getattr(logging, log_level.upper(), logging.INFO)
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(numeric_level)
+
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setLevel(numeric_level)
+    stream_handler.setFormatter(JsonLogFormatter())
+
+    root_logger.handlers.clear()
+    root_logger.addHandler(stream_handler)
+
+
+def _open_healthcheck_connection(database_config: Mapping[str, Any]) -> Any:
+    return pymysql.connect(
+        host=str(database_config["host"]),
+        port=int(database_config["port"]),
+        user=str(database_config["user"]),
+        password=str(database_config["password"]),
+        database=str(database_config["database"]),
+        charset=str(database_config.get("charset", "utf8mb4")),
+        autocommit=True,
+        connect_timeout=HEALTHCHECK_CONNECT_TIMEOUT_SECONDS,
+        read_timeout=HEALTHCHECK_QUERY_TIMEOUT_SECONDS,
+        write_timeout=HEALTHCHECK_QUERY_TIMEOUT_SECONDS,
+        cursorclass=pymysql.cursors.DictCursor,
     )
+
+
+def _load_migration_version(cursor: Any) -> str | None:
+    cursor.execute(
+        """
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = DATABASE()
+          AND table_name IN ('alembic_version', 'schema_migrations')
+        """
+    )
+    rows = cursor.fetchall()
+    table_names = {str(row["table_name"]) for row in rows}
+
+    if "alembic_version" in table_names:
+        cursor.execute("SELECT version_num FROM alembic_version LIMIT 1")
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        version = row.get("version_num")
+        return str(version) if version is not None else None
+
+    if "schema_migrations" in table_names:
+        cursor.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = DATABASE()
+              AND table_name = 'schema_migrations'
+              AND column_name IN ('version_num', 'version')
+            ORDER BY FIELD(column_name, 'version_num', 'version')
+            LIMIT 1
+            """
+        )
+        column_row = cursor.fetchone()
+        if column_row is None:
+            return None
+
+        column_name = str(column_row["column_name"])
+        cursor.execute(
+            f"SELECT `{column_name}` AS migration_version "
+            "FROM schema_migrations "
+            f"ORDER BY `{column_name}` DESC LIMIT 1"
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        version = row.get("migration_version")
+        return str(version) if version is not None else None
+
+    return None
+
+
+def _run_health_probe(database_config: Mapping[str, Any]) -> HealthProbeResult:
+    connection: Any = None
+    try:
+        connection = _open_healthcheck_connection(database_config)
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1 AS db_ok")
+            cursor.fetchone()
+            migration_version = _load_migration_version(cursor)
+        return HealthProbeResult(
+            db_connected=True,
+            migration_version=migration_version,
+        )
+    except pymysql.MySQLError:
+        return HealthProbeResult(
+            db_connected=False,
+            migration_version=None,
+        )
+    finally:
+        if connection is not None:
+            connection.close()
 
 
 def _invalid_parameter_response(message: str) -> tuple[Any, int]:
@@ -134,15 +280,85 @@ def create_app(config: AppConfig | None = None) -> Flask:
     )
 
     logger = logging.getLogger("backend.app")
-    logger.info("Initialized backend app with MySQL host %s", runtime_config.database.host)
+    logger.info(
+        "Initialized backend app.",
+        extra={
+            "event": "startup",
+            "db_host": runtime_config.database.host,
+            "environment": runtime_config.environment,
+            "log_level": runtime_config.log_level,
+        },
+    )
+
+    @app.before_request
+    def track_request_start() -> None:
+        g.request_start_time = time.perf_counter()
+
+    @app.after_request
+    def log_request(response: Response) -> Response:
+        request_start_time = getattr(g, "request_start_time", None)
+        duration_ms: float | None = None
+        if request_start_time is not None:
+            duration_ms = round(
+                (time.perf_counter() - request_start_time) * 1000,
+                2,
+            )
+
+        logger.info(
+            "HTTP request completed.",
+            extra={
+                "event": "http_request",
+                "method": request.method,
+                "path": request.path,
+                "status_code": response.status_code,
+                "duration_ms": duration_ms,
+            },
+        )
+        return response
+
+    def _log_unhandled_exception(
+        sender: Flask,
+        exception: BaseException,
+        **kwargs: Any,
+    ) -> None:
+        del sender
+        del kwargs
+        logger.exception(
+            "Unhandled exception during request.",
+            extra={
+                "event": "unhandled_exception",
+                "method": request.method,
+                "path": request.path,
+                "exception_type": exception.__class__.__name__,
+            },
+        )
+
+    got_request_exception.connect(_log_unhandled_exception, app)
 
     @app.get("/health")
-    def health() -> tuple[dict[str, Any], int]:
+    def health() -> tuple[Response, int]:
+        probe = _run_health_probe(app.config["DATABASE_CONFIG"])
         payload = {
-            "status": "ok",
+            "status": "ok" if probe.db_connected else "degraded",
             "service": "find-me-a-book-backend",
+            "database": {
+                "status": "up" if probe.db_connected else "down",
+            },
+            "migration_version": probe.migration_version,
+            "migration_status": (
+                "available"
+                if probe.migration_version is not None
+                else "unknown"
+            ),
         }
         return jsonify(payload), 200
+
+    @app.get("/ready")
+    def ready() -> tuple[Response, int]:
+        probe = _run_health_probe(app.config["DATABASE_CONFIG"])
+        if probe.db_connected:
+            return jsonify({"status": "ready", "database": "up"}), 200
+        return jsonify({"status": "not_ready", "database": "down"}), 503
 
     @app.get("/")
     def index() -> Any:

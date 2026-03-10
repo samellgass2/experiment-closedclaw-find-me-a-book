@@ -53,6 +53,21 @@ class BackendConfigTests(unittest.TestCase):
         self.assertEqual(database.user, "legacy_user")
         self.assertEqual(database.password, "legacy_pass")
 
+    def test_load_app_config_supports_generic_log_level_fallback(self) -> None:
+        config = load_app_config(environ={"LOG_LEVEL": "debug"})
+
+        self.assertEqual(config.log_level, "DEBUG")
+
+    def test_backend_log_level_takes_precedence_over_log_level(self) -> None:
+        config = load_app_config(
+            environ={
+                "BACKEND_LOG_LEVEL": "warning",
+                "LOG_LEVEL": "debug",
+            }
+        )
+
+        self.assertEqual(config.log_level, "WARNING")
+
     def test_load_app_config_raises_for_unknown_flask_env(self) -> None:
         with self.assertRaises(ValueError):
             load_app_config(environ={"FLASK_ENV": "staging"})

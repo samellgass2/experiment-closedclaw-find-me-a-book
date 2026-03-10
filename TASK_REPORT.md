@@ -1,81 +1,70 @@
-# Task Report - TASK_ID=367 RUN_ID=645
+# Task Report - TASK_ID=368 RUN_ID=646
 
 ## Scope
-Implement environment-specific Flask backend configuration loading and document
-runtime variables/defaults.
+Add production-ready health/readiness endpoints and structured logging
+instrumentation for the Flask backend.
 
 ## Changes Implemented
-- Reworked backend configuration in `backend/config.py` into a clear,
-  environment-aware module.
-- Added explicit environment profile resolution using `FLASK_ENV` with support
-  for:
-  - `development` (default)
-  - `test`
-  - `production`
-  - aliases: `dev`, `testing`, `prod`
-- Consolidated backend runtime settings into typed dataclasses:
-  - `DatabaseConfig`
-  - `ExternalServiceConfig`
-  - `AppConfig`
-- Added env-driven loading for:
-  - DB host/port/name/user/password/charset (`DB_*`)
-  - debug and log level (`BACKEND_DEBUG`, `BACKEND_LOG_LEVEL`)
-  - external API settings (`BOOK_SOURCE_BASE_URL`, `BOOK_SOURCE_API_KEY`)
-- Preserved existing development defaults:
-  - host `dev-mysql`
-  - port `3306`
-  - database `dev_find_me_a_book`
-  - user `devagent`
-- Kept backward-compatible DB fallback behavior to `DEV_MYSQL_*` if `DB_*` is
-  unset.
-- Updated Flask app factory wiring in `backend/app.py` to use only the backend
-  config layer values (no inline environment-specific literals).
-- Added root documentation:
-  - `CONFIGURATION.md` with all supported env vars, defaults, and
-    dev/production usage examples.
-- Updated `STATUS.md` with a Task 367 summary and pointer to
-  `CONFIGURATION.md`.
+- Enhanced `backend/app.py` with robust health probing:
+  - Added DB connectivity probe (`SELECT 1`) using existing DB config.
+  - Added migration-version discovery from common metadata tables when present:
+    - `alembic_version.version_num`
+    - `schema_migrations.version_num` or `schema_migrations.version`
+  - Added explicit fallback behavior when migration metadata is unavailable:
+    `migration_version: null` and `migration_status: "unknown"`.
+- Upgraded `/health` contract:
+  - Returns HTTP `200` with JSON containing:
+    - overall `status`
+    - `database.status`
+    - `migration_version`
+    - `migration_status`
+- Added `/ready` endpoint for orchestrators:
+  - Returns HTTP `200` only when DB is reachable.
+  - Returns HTTP `503` when DB is unavailable.
+- Added structured stdout logging:
+  - Introduced JSON log formatter with timestamp, level, logger, message.
+  - Added request lifecycle logging (`method`, `path`, `status_code`,
+    `duration_ms`).
+  - Added unhandled exception logging with stack traces and exception type.
+- Updated backend log-level configuration in `backend/config.py`:
+  - `BACKEND_LOG_LEVEL` remains primary control.
+  - Added `LOG_LEVEL` as fallback for environment-level verbosity control.
 
 ## Tests Added/Updated
-- Added `tests/test_backend_config.py` covering:
-  - default development profile behavior with no env vars
-  - `FLASK_ENV` profile selection
-  - `DB_*` overrides
-  - `DEV_MYSQL_*` fallback behavior
-  - invalid `FLASK_ENV` rejection
-- Updated existing test fixtures that manually instantiate `AppConfig`:
-  - `tests/test_backend_books_api.py`
-  - `tests/test_books_api.py`
-  - `tests/test_frontend_serving.py`
+- Updated `tests/test_backend_books_api.py`:
+  - `/health` payload includes DB + migration fields.
+  - `/ready` returns `200` when DB probe passes.
+  - `/ready` returns `503` when DB probe fails.
+  - Request log records include method/path/status fields.
+- Updated `tests/test_backend_config.py`:
+  - `LOG_LEVEL` fallback behavior.
+  - precedence of `BACKEND_LOG_LEVEL` over `LOG_LEVEL`.
 
 ## Validation Performed
 - Ran full test suite:
-  - `source .qa-venv/bin/activate && python -m pytest tests/ -q`
-  - Result: `90 passed in 8.89s`
+  - `. .qa-venv/bin/activate && python -m pytest tests/ -q`
+  - Result: `96 passed in 8.57s`
 
 ## Acceptance Criteria Mapping
-1. Single backend configuration module exists with environment-specific loading:
-   PASS (`backend/config.py`).
-2. Flask initialization uses this module rather than embedded env-specific
-   config:
-   PASS (`backend/app.py` uses `load_app_config`).
-3. No-env run preserves dev defaults (`dev-mysql:3306`, etc.):
-   PASS (verified by config defaults/tests).
-4. Setting `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`,
-   `FLASK_ENV` changes config without code edits:
-   PASS (implemented and tested).
-5. `CONFIGURATION.md` documents variables, defaults, and dev/prod examples:
+1. `/health` returns `200` and includes overall status, DB status, and
+   migration version/null:
    PASS.
-6. `STATUS.md` updated and references configuration docs:
-   PASS.
+2. `/ready` returns `200` only when DB connectivity succeeds and non-2xx
+   otherwise:
+   PASS (`503` on DB probe failure).
+3. Health/readiness checks are lightweight and deterministic:
+   PASS (single lightweight DB ping + metadata reads with short timeouts).
+4. Logs emitted to stdout with timestamps/levels and request method/path/status:
+   PASS (JSON formatter + `before_request`/`after_request` hooks).
+5. Env variable controls log verbosity without code changes:
+   PASS (`BACKEND_LOG_LEVEL` with `LOG_LEVEL` fallback).
+6. Status documentation updated for endpoint and logging contracts:
+   PASS (`STATUS.md` task section added).
 
 ## Files Changed
-- `backend/config.py`
 - `backend/app.py`
-- `tests/test_backend_config.py` (new)
+- `backend/config.py`
 - `tests/test_backend_books_api.py`
-- `tests/test_books_api.py`
-- `tests/test_frontend_serving.py`
-- `CONFIGURATION.md` (new)
+- `tests/test_backend_config.py`
 - `STATUS.md`
 - `TASK_REPORT.md`

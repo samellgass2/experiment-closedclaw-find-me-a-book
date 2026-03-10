@@ -1653,3 +1653,29 @@ Validation: `PASS`
 
 ## Overall Verdict
 `PASS`
+
+## Status Update: Task 271 (Advanced Book Filtering Backend Data Model)
+
+### What was added
+- Added a dedicated backend filtering/query module at `backend/filters.py`.
+- `backend/filters.py` now defines:
+  - `BookFilterCriteria` with `genre`, `age_rating`, `subject_matter`, `plot_points`, `character_dynamics`, and `spice_level` (plus query/limit/age bounds).
+  - `build_book_filter_query(criteria)` returning parameterized SQL plus bound params (no unsafe value interpolation).
+  - `execute_book_filter_query(...)` and `row_to_book_payload(...)` for framework-agnostic execution and JSON-ready output.
+- Refactored `backend/repositories/books.py` to delegate SQL construction and row mapping to `backend/filters.py` while preserving existing repository API usage.
+
+### Relevance calculation (current)
+- Relevance is computed in SQL as a weighted sum of matched criteria.
+- Priority order and weights:
+  - Highest: exact genre and age-rating matches (`GENRE_WEIGHT=30`, `AGE_RATING_WEIGHT=22`)
+  - Next: subject matter and spice level (`SUBJECT_MATCH_WEIGHT=10`, `SPICE_WEIGHT=18`)
+  - Then: plot points and character dynamics (`PLOT_POINT_MATCH_WEIGHT=8`, `CHARACTER_DYNAMIC_WEIGHT=7`)
+- Results are ordered by `relevance_score DESC`, then by secondary ranking fields when available (`average_rating DESC`, `ratings_count DESC`), then recency/id tie-breakers.
+
+### Tests added/updated
+- Added `tests/test_backend_filter_query.py` with coverage for:
+  - Genre + age rating filter application through parameterized SQL.
+  - Subject matter + spice level refinement adding additional filter constraints.
+  - Relevance-score ordering behavior when criteria are present.
+  - Weight-priority shape in generated relevance expression.
+

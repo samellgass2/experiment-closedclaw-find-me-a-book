@@ -1,75 +1,45 @@
-# TASK REPORT
+# Task Report: 348
 
-## Task
-- TASK_ID: 347
-- RUN_ID: 630
-- Title: Introduce centralized configuration module
+## Summary
 
-## Summary of Work
-- Added root-level `config.py` as the centralized runtime configuration module.
-- Implemented typed settings dataclasses and loaders for:
-  - Database: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
-  - Book source: `BOOK_SOURCE_BASE_URL`, `BOOK_SOURCE_API_KEY`
-  - Crawler: `CRAWLER_RATE_LIMIT_PER_MIN`
-- Added sensible local defaults aligned to this dev environment:
-  - `DB_HOST=dev-mysql`, `DB_PORT=3306`, `DB_NAME=dev_find_me_a_book`, `DB_USER=devagent`, `DB_PASSWORD=''`
-  - `BOOK_SOURCE_BASE_URL=https://www.goodreads.com`, `BOOK_SOURCE_API_KEY=None`, `CRAWLER_RATE_LIMIT_PER_MIN=60`
-- Preserved compatibility by allowing `DEV_MYSQL_*` as fallback inputs behind `DB_*`.
-- Refactored modules to consume centralized config instead of direct env access/hardcoded runtime values:
-  - `backend/config.py`
-  - `crawler/goodreads_crawler.py`
-  - `db/setup_database.py`
-  - `scripts/benchmark_search_performance.py`
-- Added `tests/test_root_config.py` to verify root config importability and env/default behavior.
-- Updated `STATUS.md` with Task 347 documentation, env variable matrix/defaults, and dev-mysql/dev DB relationship guidance.
+Established `python -m pytest` as the canonical project test command and
+verified it succeeds from repo root after dependency installation.
 
-## Acceptance Coverage
-1. `config.py` exists at repo root and is importable (`import config`).
-2. `config.py` defines required DB/book-source/crawler settings via env variables with documented defaults.
-3. No production credentials or production-only hostnames were introduced; defaults are local/dev-safe.
-4. Existing runtime code previously hardcoding/reading DB or source config directly now imports centralized config.
-5. `STATUS.md` documents the configuration module, supported variables/defaults, and how they map to `dev-mysql` + `dev_find_me_a_book`.
+## Changes Made
 
-## Validation / Test Execution
-Commands run:
-1. `python -m pytest tests/ -q`
-2. `python -m unittest discover -s tests -p 'test*.py'`
+- Added `pytest` discovery configuration:
+  - `pytest.ini`
+    - `testpaths = tests`
+    - `python_files = test_*.py`
+- Added a minimal smoke import module:
+  - `tests/test_smoke_env.py`
+    - imports `config`, `backend.app`, `backend.repositories.books`,
+      `db.setup_database`, and `crawler.goodreads_crawler`.
+- Updated contributor/developer documentation to set one official test command:
+  - `README.md`
+  - `TESTING_STRATEGY.md`
+- Updated status log:
+  - `STATUS.md` (Task 348 section with validation evidence)
 
-Observed results:
-- `python -m pytest tests/ -q`: FAIL in environment (`No module named pytest`)
-- `python -m unittest discover -s tests -p 'test*.py'`: PASS (`Ran 84 tests`, `OK`, `skipped=23`)
+## Validation
 
-## Files Changed
-- `config.py`
-- `backend/config.py`
-- `crawler/goodreads_crawler.py`
-- `db/setup_database.py`
-- `scripts/benchmark_search_performance.py`
-- `tests/test_database_setup.py`
-- `tests/test_goodreads_crawler.py`
-- `tests/test_root_config.py`
-- `STATUS.md`
-- `TASK_REPORT.md`
+Commands executed:
 
-## Workflow 35 Follow-up (Bug: frontend entrypoint on :8000)
-- Updated backend routing so `/` serves `frontend/index.html`.
-- Added `/health` for backend health JSON previously returned by `/`.
-- Added static asset route support from `frontend/` so app files load at root origin.
-- Added focused tests in `tests/test_frontend_serving.py` for:
-  - `/` returning HTML with `#search-input`
-  - `/api/books.js` frontend module availability
-- Ran browser acceptance with Playwright Chromium against `http://localhost:8000`:
-  - Verified `#search-input`, `#filters-form`, and Search button render.
+1. `python -m pip install -r requirements.txt`
+   - Succeeded and installed/verified dependencies, including `pytest`.
+2. `python -m pytest`
+   - Succeeded from project root.
+   - Result: `87 passed in 6.97s`.
 
-### Workflow 35 Validation
-Commands run:
-1. `python -m pytest tests/ -q`
-2. `python -m pytest tests/test_performance_security_smoke.py::SearchPerformanceSmokeTests::test_representative_filter_queries_stay_within_p95_budget -q`
-3. `python -m unittest discover -s tests -p 'test*.py'`
+## Acceptance Criteria Mapping
 
-Observed results:
-- Full pytest run: 1 failing test unrelated to this routing bug:
-  - `tests/test_performance_security_smoke.py::SearchPerformanceSmokeTests::test_representative_filter_queries_stay_within_p95_budget`
-  - Failure reason: p95 latency budget exceeded for repository query scenario.
-- Targeted rerun of failing performance test: still failing with the same p95 budget assertion.
-- `unittest` discovery run: PASS.
+1. Test module under top-level `tests/`:
+   - `tests/test_smoke_env.py` added and discovered by pytest.
+2. Canonical command execution:
+   - `python -m pytest` runs successfully from repo root after requirements install.
+3. Smoke imports of core modules:
+   - Explicitly validated in `tests/test_smoke_env.py`.
+4. No conflicting primary test runner docs:
+   - README and testing strategy now declare only `python -m pytest` as canonical.
+5. STATUS/docs updated:
+   - `STATUS.md`, `README.md`, `TESTING_STRATEGY.md` updated accordingly.

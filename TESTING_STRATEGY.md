@@ -27,19 +27,15 @@ MySQL query integration, and Goodreads crawler data quality.
     `extract_author_names`, `slugify_genre`, `resolve_mysql_config`)
 
 ## Test Tooling and Execution
-- Primary tool: `pytest` (when installed) for fast iteration and filtering.
-- Supported fallback: `unittest` discovery (already used in this repo).
+- Canonical tool: `pytest`, executed via `python -m pytest`.
 - DB-backed tests use MySQL via `DEV_MYSQL_*` environment variables.
 
 Recommended local commands (repo root):
 ```bash
 python --version
-python -m pytest tests/ -q
-pytest tests/ -q
-python -m unittest discover -s tests -p 'test*.py'
+python -m pip install -r requirements.txt
+python -m pytest
 ```
-
-If `pytest` is unavailable, `unittest` is the minimum required gate.
 
 Database bootstrap before running MySQL integration modules in a clean env:
 ```bash
@@ -54,7 +50,6 @@ python db/setup_database.py
 Focused filtering integration run:
 ```bash
 python -m pytest tests/test_integration_filtering.py -q
-python -m unittest tests.test_integration_filtering
 ```
 
 Performance + security smoke run:
@@ -63,7 +58,7 @@ export DEV_MYSQL_HOST=dev-mysql
 export DEV_MYSQL_PORT=3306
 export DEV_MYSQL_USER=devagent
 export DEV_MYSQL_PASSWORD=...
-python -m unittest tests.test_performance_security_smoke -v
+python -m pytest tests/test_performance_security_smoke.py -q
 python scripts/benchmark_search_performance.py --seed-size 1200 --warmup 2 --iterations 8 --budget-ms 400
 ```
 
@@ -146,7 +141,7 @@ Planned scope (next phase):
 ## Performance and Security Smoke Checks
 Minimum recurring smoke checks (CI or scheduled local run):
 - Performance:
-  - Run `python -m unittest tests.test_performance_security_smoke -v`.
+  - Run `python -m pytest tests/test_performance_security_smoke.py -q`.
     - `SearchPerformanceSmokeTests` creates an isolated MySQL schema, seeds
       1200 books, and runs representative query/filter scenarios.
     - Each scenario asserts a p95 wall-clock budget:
@@ -172,15 +167,13 @@ Minimum recurring smoke checks (CI or scheduled local run):
 
 ## Suggested Test Matrix per Change Type
 - Query/filter logic changes (`backend/repositories/books.py`):
-  - run `test_books_repository_filters`, `test_relevance_ranking`, and API
-    integration coverage.
+  - run `python -m pytest tests/test_books_repository_filters.py tests/test_relevance_ranking.py tests/test_books_api.py -q`.
 - API parsing/routing changes (`backend/app.py`):
-  - run `test_backend_books_api` and `test_books_api`.
+  - run `python -m pytest tests/test_backend_books_api.py tests/test_books_api.py -q`.
 - Crawler/parser/persistence changes (`crawler/goodreads_crawler.py`):
-  - run `test_goodreads_crawler` and `test_crawler_mysql_integration`.
+  - run `python -m pytest tests/test_goodreads_crawler.py tests/test_crawler_mysql_integration.py -q`.
 - DB setup or migration changes (`db/setup_database.py`, `db/migrations/*`):
-  - run `test_database_setup`, `test_mysql_setup_validation`, and impacted
-    integration tests.
+  - run `python -m pytest tests/test_database_setup.py tests/test_mysql_setup_validation.py -q` and impacted integration tests.
 
 ## Exit Criteria for QA Stabilization
 - Unit tests pass in local/dev-runner environment.

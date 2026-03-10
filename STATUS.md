@@ -1,3 +1,33 @@
+# Status Update: Task 348
+
+## Canonical Pytest Test Command
+
+- Standardized on `python -m pytest` as the canonical test command for local
+  development and CI.
+- Added `pytest.ini` with:
+  - `testpaths = tests`
+  - `python_files = test_*.py`
+  to keep pytest discovery stable from repo root.
+- Added `tests/test_smoke_env.py` smoke test to verify key modules import in a
+  clean environment:
+  - `config`
+  - `backend.app`
+  - `backend.repositories.books`
+  - `db.setup_database`
+  - `crawler.goodreads_crawler`
+- Updated docs to remove conflicting primary runner guidance and declare
+  `python -m pytest` as the official command:
+  - `README.md`
+  - `TESTING_STRATEGY.md`
+
+### Validation Commands Run
+
+1. `python -m pip install -r requirements.txt`
+   - Result: pass (installed/verified project dependencies including `pytest`).
+2. `python -m pytest`
+   - Result: pass (full test suite discoverable and executable via pytest from
+     project root, including new smoke import test).
+
 # Status Update: Task 336
 
 ## Wire Normalization into Crawler Ingestion Pipeline

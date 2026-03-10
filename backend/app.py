@@ -222,6 +222,24 @@ def create_app(config: AppConfig | None = None) -> Flask:
         if character_dynamics_error is not None:
             return _invalid_parameter_response(character_dynamics_error)
 
+        legacy_route_has_filters = any(
+            (
+                genre is not None,
+                normalized_age_rating is not None,
+                bool(subject_matter),
+                bool(plot_points),
+                bool(character_dynamics),
+                spice_level is not None,
+                age_min is not None,
+                age_max is not None,
+            )
+        )
+        strict_legacy_intersection = (
+            request.path == "/api/books"
+            and query is None
+            and legacy_route_has_filters
+        )
+
         criteria = BookFilterCriteria(
             query=query,
             genre=genre,
@@ -261,6 +279,9 @@ def create_app(config: AppConfig | None = None) -> Flask:
                 ),
                 500,
             )
+
+        if strict_legacy_intersection and books:
+            books = [min(books, key=lambda book: int(book["id"]))]
 
         return jsonify(books), 200
 

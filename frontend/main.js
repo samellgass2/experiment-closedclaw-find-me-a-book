@@ -1,9 +1,13 @@
+import { BooksApiError, searchBooksApi } from "./api/books.js";
+
 const searchForm = document.querySelector("#search-form");
 const searchInput = document.querySelector("#search-input");
+const searchButton = searchForm?.querySelector('button[type="submit"]') ?? null;
 const filtersForm = document.querySelector("#filters-form");
 const fictionTypeInput = document.querySelector("#filter-fiction-type");
 const ageRatingInput = document.querySelector("#filter-age-rating");
 const resultsStatus = document.querySelector("#results-status");
+const resultsError = document.querySelector("#results-error");
 const resultsList = document.querySelector("#results-list");
 
 const mockBooks = [
@@ -137,22 +141,70 @@ const searchParams = {
   spiceLevel: "any",
 };
 
-function normalizeBook(book) {
-  const subjectList = Array.isArray(book.subjects)
-    ? book.subjects
-    : book.subject
-      ? [String(book.subject)]
-      : [];
+let isLoading = false;
 
+function mapApiAgeRating(value) {
+  if (value === "general" || value === "kids") {
+    return "kids";
+  }
+  if (value === "mature" || value === "adult") {
+    return "adult";
+  }
+  return "teen";
+}
+
+function mapApiSpiceLevel(book) {
+  const rawSpice = book.spiceLevel ?? book.spice_level;
+  if (rawSpice === "low" || rawSpice === "medium" || rawSpice === "high") {
+    return rawSpice;
+  }
+
+  const ageRating = book.ageRating ?? book.age_rating;
+  if (ageRating === "general" || ageRating === "kids") {
+    return "low";
+  }
+  if (ageRating === "mature" || ageRating === "adult") {
+    return "high";
+  }
+  return "medium";
+}
+
+function inferFictionType(book) {
+  const explicitType = book.fictionType ?? book.fiction_type;
+  if (explicitType === "fiction" || explicitType === "nonfiction") {
+    return explicitType;
+  }
+
+  const genreText = String(book.genre ?? "").toLowerCase();
+  if (genreText.includes("nonfiction") || genreText.includes("reference")) {
+    return "nonfiction";
+  }
+
+  return "fiction";
+}
+
+function normalizeSubjectList(book) {
+  if (Array.isArray(book.subjects)) {
+    return book.subjects.map((subject) => String(subject).toLowerCase());
+  }
+
+  if (typeof book.subject === "string" && book.subject.trim() !== "") {
+    return [book.subject.toLowerCase()];
+  }
+
+  return [];
+}
+
+function normalizeBook(book) {
   return {
     title: book.title ?? "Untitled",
     author: book.author ?? "Unknown",
     snippet: book.snippet ?? book.description ?? "No description available.",
     genre: book.genre ?? "Unknown",
-    fictionType: book.fictionType ?? "fiction",
-    ageRating: book.ageRating ?? "teen",
-    subjects: subjectList.map((subject) => String(subject).toLowerCase()),
-    spiceLevel: book.spiceLevel ?? "low",
+    fictionType: inferFictionType(book),
+    ageRating: mapApiAgeRating(book.ageRating ?? book.age_rating),
+    subjects: normalizeSubjectList(book),
+    spiceLevel: mapApiSpiceLevel(book),
   };
 }
 
@@ -261,51 +313,6 @@ function filterMockBooks(params) {
   return filterBooksCollection(mockBooks, params);
 }
 
-function appendApiQueryParams(url, params) {
-  if (params.query) {
-    url.searchParams.set("q", params.query);
-  }
-  if (params.ageRating !== "all") {
-    url.searchParams.set("age_rating", params.ageRating);
-  }
-  if (params.spiceLevel !== "any") {
-    url.searchParams.set("spice_level", params.spiceLevel);
-  }
-  if (params.subjects.length) {
-    url.searchParams.set("subject", params.subjects.join(","));
-  }
-  if (params.fictionType !== "all") {
-    url.searchParams.set("fiction_type", params.fictionType);
-  }
-}
-
-async function fetchBooksFromApi(params) {
-  const url = new URL("/api/books", window.location.origin);
-  appendApiQueryParams(url, params);
-
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
-  }
-
-  const payload = await response.json();
-  if (!Array.isArray(payload)) {
-    throw new Error("Unexpected API response format");
-  }
-
-  return payload.map(normalizeBook);
-}
-
-// Isolated search provider to keep swapping data sources simple in later tasks.
-async function searchBooks(params) {
-  try {
-    const apiResults = await fetchBooksFromApi(params);
-    return filterBooksCollection(apiResults, params);
-  } catch {
-    return filterMockBooks(params);
-  }
-}
-
 function getSelectedSubjects() {
   if (!filtersForm) {
     return [];
@@ -330,15 +337,76 @@ function syncSearchParamsFromInputs() {
   }
 }
 
+function setLoadingState(loading) {
+  isLoading = loading;
+
+  if (searchButton) {
+    searchButton.disabled = loading;
+    searchButton.textContent = loading ? "Searching..." : "Search";
+  }
+
+  if (filtersForm) {
+    for (const control of filtersForm.elements) {
+      if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement) {
+        control.disabled = loading;
+      }
+    }
+  }
+
+  if (searchInput) {
+    searchInput.disabled = loading;
+  }
+}
+
+function setErrorMessage(message) {
+  if (!resultsError) {
+    return;
+  }
+
+  if (!message) {
+    resultsError.hidden = true;
+    resultsError.textContent = "";
+    return;
+  }
+
+  resultsError.hidden = false;
+  resultsError.textContent = message;
+}
+
+function buildUserFacingError(error) {
+  if (error instanceof BooksApiError) {
+    if (error.status !== null) {
+      return `Live API request failed (${error.status}). Showing fallback results.`;
+    }
+    return "Unable to reach live API. Showing fallback results.";
+  }
+  return "Search request failed. Showing fallback results.";
+}
+
 async function runSearch() {
+  if (isLoading) {
+    return;
+  }
+
   syncSearchParamsFromInputs();
+  setErrorMessage("");
+  setLoadingState(true);
 
   if (resultsStatus) {
     resultsStatus.textContent = "Loading results...";
   }
 
-  const results = await searchBooks(searchParams);
-  renderResults(results);
+  try {
+    const apiResults = await searchBooksApi(searchParams);
+    const filteredResults = filterBooksCollection(apiResults, searchParams);
+    renderResults(filteredResults);
+  } catch (error) {
+    setErrorMessage(buildUserFacingError(error));
+    const fallbackResults = filterMockBooks(searchParams);
+    renderResults(fallbackResults);
+  } finally {
+    setLoadingState(false);
+  }
 }
 
 if (searchForm) {

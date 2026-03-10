@@ -1,3 +1,64 @@
+# Status Update: Task 266
+
+## Frontend Search, Filter UI, and API Integration
+
+- Added a dedicated frontend API client module at `frontend/api/books.js`:
+  - `buildBooksSearchUrl(searchParams)` builds the `/api/books` request URL
+    from current UI state.
+  - `searchBooksApi(searchParams)` performs `fetch` and throws typed
+    `BooksApiError` on network failures, non-2xx responses, or invalid payload
+    formats.
+- Wired search UI in `frontend/main.js` to call the API client module instead
+  of inline request logic.
+- Added explicit in-flight request handling:
+  - `isLoading` lock prevents duplicate submissions.
+  - Search button label changes to `Searching...` and controls are disabled
+    during active request.
+  - Results status shows `Loading results...` while waiting.
+- Added explicit error surface in `frontend/index.html` (`#results-error`) and
+  styled it in `frontend/styles.css`.
+- On API failure, UI now:
+  - displays a clear error message in the results region,
+  - falls back to filtered local mock data so manual testing still functions.
+
+### Frontend Endpoint Contract (Current)
+
+- Called endpoint: `GET /api/books`
+- Base URL source: `window.location.origin`
+- Query parameter mapping sent by frontend:
+  - `q`: search text
+  - `fiction_type`: current fiction/nonfiction UI selection (`all` omitted)
+  - `spice_level`: `low|medium|high` (`any` omitted)
+  - `age_min`, `age_max`: derived from age filter:
+    - `kids` -> `0..12`
+    - `teen` -> `13..17`
+    - `adult` -> `18..120`
+  - `subject`: first selected subject (backend currently accepts one value)
+  - `subjects`: comma-separated list of all selected subjects (forward
+    compatibility hint; backend may ignore unknown params)
+
+### Response Shape + UI Normalization
+
+- Expected response from backend: JSON array of book objects, currently shaped
+  as:
+  - `id`, `title`, `author`, `genre`, `age_rating`, `description`
+- Frontend normalizes API records to UI shape:
+  - `title`, `author`, `snippet`, `fictionType`, `ageRating`, `subjects`,
+    `spiceLevel`
+- Additional client-side filtering remains in place to preserve current UI
+  behavior for filters that backend does not yet fully implement.
+
+### Assumptions and Fallbacks
+
+- Backend currently validates/uses `q`, `genre`, `subject`, `spice_level`,
+  `age_min`, `age_max`; `fiction_type` is included for compatibility but may be
+  ignored by backend at this stage.
+- Subject UI supports multi-select while backend supports a single `subject`
+  value, so frontend sends first subject directly and retains complete
+  client-side filtering over returned/fallback data.
+- If backend is unreachable or returns non-2xx, frontend displays an error and
+  renders mock fallback results rather than leaving the page blank.
+
 # Status Update: Task 265
 
 ## Frontend Search, Filter UI, and API Integration

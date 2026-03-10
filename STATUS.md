@@ -1928,3 +1928,68 @@ Validation: `PASS`
 - Result in this run:
   - `Ran 62 tests in 0.450s`
   - `OK (skipped=23)`
+
+# QA Validation Summary: Workflow #29
+
+Date: 2026-03-10
+Branch validated: `workflow/29/dev`
+Validator role: QA validation agent (no code changes)
+
+## Commits Reviewed (`main..HEAD`)
+
+- `0fe5fa5` task/313: supervisor safety-commit (Codex omitted git commit)
+- `091a5a6` task/304: update task report
+- `67d2b17` task/304: add performance and security smoke tests
+- `0aae03f` task/303: add crawler validation and filtering smoke tests
+- `823b9f6` task/302: add integration tests for DB filtering
+- `535eee6` task/301: update run report for unit test coverage
+- `24a2beb` task/301: add unit tests for repository filtering utilities
+- `e3c9dc0` task/300: record audit run report
+- `7f54168` task/300: add testing strategy from codebase audit
+
+## Commands Run and Results
+
+1. `python --version`
+   - Result: `Python 3.12.13`
+2. `ls -d venv .venv 2>/dev/null || true`
+   - Result: no virtual environment directory found.
+3. `python -m pytest tests/ -q`
+   - Result: FAILED (`/usr/local/bin/python: No module named pytest`)
+4. `pytest tests/ -q`
+   - Result: FAILED (`pytest: command not found`)
+5. `python -m unittest discover -s tests -p 'test*.py'`
+   - Result: PASS (`Ran 75 tests in 3.624s`, `OK`, `skipped=23`)
+6. `python db/setup_database.py`
+   - Result: PASS (`Database created successfully, schema applied, and validation queries passed.`)
+7. `python -m unittest tests.test_books_repository_filtering_units -v`
+   - Result: PASS (`Ran 9 tests`, `OK`)
+8. `python -m unittest tests.test_integration_filtering -v`
+   - Result: PASS (`Ran 5 tests`, `OK`)
+9. `python -m unittest tests.test_crawler_validation_smoke -v`
+   - Result: PASS (`Ran 3 tests`, `OK`)
+10. `python -m unittest tests.test_performance_security_smoke -v`
+    - Result: PASS (`Ran 5 tests`, `OK`)
+11. `python scripts/benchmark_search_performance.py --seed-size 1200 --warmup 2 --iterations 8 --budget-ms 400`
+    - Result: PASS (`All benchmark queries passed budget check (p95 <= 400.00ms).`)
+12. `cd frontend && npm test`
+    - Result: PASS (`3 passed, 0 failed`)
+
+## Per-Task Acceptance Verdict
+
+- Task 300 (Audit codebase and define test strategy): PASS
+- Task 301 (Add unit tests for filtering and utilities): PASS
+- Task 302 (Implement integration tests for database filtering): PASS
+- Task 303 (Create crawler data validation and smoke tests): PASS
+- Task 304 (Add basic performance and security smoke tests): PASS
+
+## Workflow Goal Verification
+
+Workflow goal "End-to-End Testing, Bug Fixes, and QA Stabilization" is met for this branch:
+- Backend/query layer validated via unit + integration + security checks.
+- Data/crawler flow validated via fixture-based crawler tests and DB-backed smoke retrieval through the real filtering layer.
+- Frontend behavior validated via `frontend/tests/search_filters.test.js`.
+- Performance/security basics validated via smoke tests plus benchmark budget gate.
+
+## Overall Verdict
+
+PASS

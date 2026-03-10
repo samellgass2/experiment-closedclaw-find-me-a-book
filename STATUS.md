@@ -2557,3 +2557,50 @@ Examples:
 - Full tests executed:
   - `. .qa-venv/bin/activate && python -m pytest tests/ -q`
   - Result: `96 passed`
+
+## Tester Report - Workflow #37 (Production-Ready Deployment, Config, and Observability Setup)
+
+Date: 2026-03-10  
+Branch: `workflow/37/dev`  
+Role: TESTER
+
+### Tests Run And Results
+
+1. `source .qa-venv/bin/activate && python -m pytest tests/ -q`
+   - Result: `96 passed in 11.64s`
+
+### Acceptance Verification
+
+1. Task #366 - Add containerization and base Dockerfile: **PASS**
+   - `Dockerfile` exists at repo root and is production-oriented (Python slim base, system deps, unprivileged runtime user, `EXPOSE 8000`, `CMD ["python", "-m", "backend.app"]`).
+   - DB runtime configuration is environment-driven (`DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`) and wired through backend config loading.
+   - `docker-compose.example.yml` exists and defines `app` + `dev-mysql` services, with app DB host set to `dev-mysql` and port mapping `8000:8000`.
+   - `STATUS.md` contains build/run instructions and compose reference.
+   - Note: Docker CLI is not available in this test runner, so an actual `docker build` execution could not be performed here.
+
+2. Task #367 - Implement environment-specific configuration loading: **PASS**
+   - `backend/config.py` provides a centralized environment-aware config module with profiles (`development`, `test`, `production`).
+   - Flask app initialization in `backend/app.py` consumes this config layer (no inlined DB literals in app init).
+   - Default behavior with empty env resolves to dev settings (`dev-mysql:3306`, `dev_find_me_a_book`, `devagent`) and expected debug default.
+   - Env overrides (`DB_*`, `FLASK_ENV`, logging/debug vars) change runtime config without code changes.
+   - `CONFIGURATION.md` documents variables, defaults, and dev/prod examples.
+   - `STATUS.md` references the configuration system and docs.
+
+3. Task #368 - Add health, readiness, and logging instrumentation: **PASS**
+   - `/health` returns HTTP 200 with JSON containing overall status, DB status, and migration version (`null` when unavailable/unknown).
+   - `/ready` returns HTTP 200 when DB connectivity succeeds and non-2xx (503) when DB is unavailable.
+   - Health/readiness probes are lightweight (short DB timeouts; simple probe queries).
+   - Logs are structured JSON to stdout with timestamp, level, message; request logs include method/path/status.
+   - Log verbosity is environment-controlled (`BACKEND_LOG_LEVEL`, fallback `LOG_LEVEL`).
+   - `STATUS.md` documents endpoint contracts and logging controls.
+
+### Bugs Filed
+
+- None.
+
+### Integration Verdict
+
+- Containerization, env-based config loading, health/readiness probes, and structured logging work cohesively.
+- No obvious regressions detected from functional checks and full test suite.
+
+**Overall Verdict: CLEAN**

@@ -1200,3 +1200,54 @@ http://127.0.0.1:4173
 
 This task intentionally keeps styling minimal and functional while establishing
 stable layout regions for upcoming search/filter/result feature tasks.
+
+# Status Update: Task 267
+
+## Frontend Search/Filter UI Tests
+
+- Added a lightweight frontend test suite at:
+  - `frontend/tests/search_filters.test.js`
+- Added frontend-local test command configuration:
+  - `frontend/package.json` (`npm test` runs Node's built-in test runner)
+- Refactored `frontend/main.js` to expose testable app wiring (`createSearchApp` and `initializeSearchApp`) while preserving existing browser behavior.
+
+### Coverage Added
+
+1. Search input and submit button wiring:
+   - verifies submit handler runs from the rendered controls,
+   - verifies query text is synced into search state,
+   - verifies API client receives the query on submit.
+2. Filter-to-API parameter wiring:
+   - verifies filter changes (fiction type, age rating, subject, spice level)
+     are reflected in the parameters passed to API search logic.
+3. Results rendering updates:
+   - verifies rendered result rows and status text update when API responses
+     change across successive searches.
+
+### How To Run Frontend Tests
+
+From repository root:
+
+```bash
+cd frontend
+npm test
+```
+
+### Verification Commands Run
+
+1. Frontend tests:
+
+```bash
+cd frontend
+npm test
+```
+
+Result: `PASS` (3/3 tests passing)
+
+2. Existing Python unit tests:
+
+```bash
+python -m unittest discover tests
+```
+
+Result: `PASS` (`Ran 46 tests`, `OK`, `skipped=18`)

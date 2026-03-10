@@ -1,48 +1,32 @@
-# Task 266 Report
+# Task Report: TASK_ID 267
 
 ## Summary
-Implemented a dedicated frontend API client for book search and wired the search/filter UI to make live `/api/books` requests, with explicit loading, duplicate-submit prevention, error display, and mock-data fallback behavior.
+Implemented a minimal frontend test suite for search and filter behavior and made the frontend app wiring testable without adding external test libraries.
 
-## What changed
-- Added `frontend/api/books.js`:
-  - `buildBooksSearchUrl(searchParams)` to convert query/filter state into request params.
-  - `searchBooksApi(searchParams)` to execute fetch with structured error handling.
-  - `BooksApiError` for network/non-2xx/invalid-payload failures.
-- Updated `frontend/main.js`:
-  - Removed inline API request logic and imported `searchBooksApi`.
-  - Added in-flight request lock (`isLoading`) to prevent duplicate submissions.
-  - Disabled search/filter controls while request is in progress.
-  - Added loading indicator text (`Loading results...`, submit button text `Searching...`).
-  - Added clear user-facing error messaging while preserving layout.
-  - Added fallback path to render filtered mock results when API fails.
-  - Kept client-side filtering pass to preserve existing filter behavior where backend fields are incomplete.
-- Updated `frontend/index.html`:
-  - Added `<p id="results-error">` message region for API failure feedback.
-- Updated `frontend/styles.css`:
-  - Added styles for disabled submit state and the results error message.
-- Updated `STATUS.md`:
-  - Documented endpoint URL, request parameter mapping, expected response shape, and loading/error/fallback assumptions.
+## Changes Made
+- Refactored `frontend/main.js`:
+  - Added `createSearchApp(...)` for dependency-injected, testable search/filter behavior.
+  - Added `initializeSearchApp(...)` to wire DOM elements in browser runtime.
+  - Kept automatic browser initialization (`initializeSearchApp()` when `document` exists).
+- Added `frontend/tests/search_filters.test.js` with 3 high-value tests:
+  - search input + submit button interaction and query propagation to API client,
+  - filter change propagation into API request params,
+  - results list/status updates when API response data changes.
+- Added `frontend/package.json` to run frontend tests via Node built-in test runner.
+- Updated `STATUS.md` with test coverage summary and run instructions.
 
-## Endpoint + Shape Notes
-- Live endpoint called: `GET /api/books` (origin-relative).
-- Request params generated from UI state:
-  - `q`, `fiction_type`, `spice_level`, `age_min`, `age_max`, `subject`, `subjects`.
-- Expected backend response: JSON array with keys like `id`, `title`, `author`, `genre`, `age_rating`, `description`.
-- Frontend normalizes API records into current UI result shape before rendering.
+## Test Commands and Results
+1. `cd frontend && npm test`
+   - PASS (3/3 frontend tests)
+2. `python -m unittest discover tests`
+   - PASS (`Ran 46 tests`, `OK`, `skipped=18`)
+3. `python -m pytest tests/ -q`
+   - Not available in environment (`No module named pytest`)
 
-## Acceptance Criteria Check
-1. Search triggers real HTTP request to backend endpoint: PASS.
-2. API client isolated in dedicated module file: PASS (`frontend/api/books.js`).
-3. Loading indicator + duplicate-submission prevention implemented: PASS.
-4. Failed API requests show clear error message without layout break: PASS.
-5. API response renders in results; fallback behavior defined and implemented for unreachable endpoint: PASS.
-6. `STATUS.md` updated with endpoint params/shape and loading/error handling: PASS.
-
-## Tests Run
-- `python -m pytest tests/ -q` -> FAIL (`No module named pytest` in this environment)
-- `python -m unittest discover -s tests -v` -> PASS (`Ran 46 tests`, `OK`, `skipped=18`)
-- `node --check frontend/main.js` -> PASS
-- `node --check frontend/api/books.js` -> PASS
-
-## Notes
-- Skipped tests are pre-existing environment skips (missing Flask/PyMySQL), not introduced by this task.
+## Acceptance Criteria Mapping
+1. New frontend test file: PASS (`frontend/tests/search_filters.test.js`)
+2. Search input/button interaction test: PASS
+3. Filter change updates API params test: PASS
+4. Results update test for changed data: PASS
+5. Documented test command runs successfully: PASS (`cd frontend && npm test`)
+6. STATUS.md updated with run instructions and coverage: PASS

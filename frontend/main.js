@@ -1,15 +1,5 @@
 import { BooksApiError, searchBooksApi } from "./api/books.js";
 
-const searchForm = document.querySelector("#search-form");
-const searchInput = document.querySelector("#search-input");
-const searchButton = searchForm?.querySelector('button[type="submit"]') ?? null;
-const filtersForm = document.querySelector("#filters-form");
-const fictionTypeInput = document.querySelector("#filter-fiction-type");
-const ageRatingInput = document.querySelector("#filter-age-rating");
-const resultsStatus = document.querySelector("#results-status");
-const resultsError = document.querySelector("#results-error");
-const resultsList = document.querySelector("#results-list");
-
 const mockBooks = [
   {
     title: "The Great Adventure",
@@ -133,15 +123,15 @@ const mockBooks = [
   },
 ];
 
-const searchParams = {
-  query: "",
-  fictionType: "all",
-  ageRating: "all",
-  subjects: [],
-  spiceLevel: "any",
-};
-
-let isLoading = false;
+function createDefaultSearchParams() {
+  return {
+    query: "",
+    fictionType: "all",
+    ageRating: "all",
+    subjects: [],
+    spiceLevel: "any",
+  };
+}
 
 function mapApiAgeRating(value) {
   if (value === "general" || value === "kids") {
@@ -208,51 +198,6 @@ function normalizeBook(book) {
   };
 }
 
-function renderResults(results) {
-  if (!resultsList || !resultsStatus) {
-    return;
-  }
-
-  resultsList.replaceChildren();
-
-  if (!results.length) {
-    resultsStatus.textContent = "No books matched your search and filters.";
-    return;
-  }
-
-  resultsStatus.textContent = `${results.length} result(s) shown.`;
-
-  for (const item of results) {
-    const row = document.createElement("li");
-    row.className = "result-item";
-
-    const title = document.createElement("h3");
-    title.textContent = item.title;
-
-    const author = document.createElement("p");
-    author.className = "result-author";
-    author.textContent = `Author: ${item.author}`;
-
-    const meta = document.createElement("p");
-    meta.className = "result-meta";
-    meta.textContent =
-      `Type: ${formatFictionType(item.fictionType)} | ` +
-      `Age: ${formatAgeRating(item.ageRating)} | ` +
-      `Spice: ${formatSpiceLevel(item.spiceLevel)}`;
-
-    const snippet = document.createElement("p");
-    snippet.className = "result-snippet";
-    snippet.textContent = item.snippet;
-
-    const subjects = document.createElement("p");
-    subjects.className = "result-subjects";
-    subjects.textContent = `Subject(s): ${item.subjects.join(", ") || "none"}`;
-
-    row.append(title, author, meta, snippet, subjects);
-    resultsList.append(row);
-  }
-}
-
 function formatFictionType(value) {
   return value === "nonfiction" ? "Non-fiction" : "Fiction";
 }
@@ -309,115 +254,247 @@ function filterBooksCollection(items, params) {
     });
 }
 
-function filterMockBooks(params) {
-  return filterBooksCollection(mockBooks, params);
+function cloneSearchParams(searchParams) {
+  return {
+    ...searchParams,
+    subjects: [...searchParams.subjects],
+  };
 }
 
-function getSelectedSubjects() {
-  if (!filtersForm) {
-    return [];
+export function createSearchApp({
+  searchForm = null,
+  searchInput = null,
+  searchButton = null,
+  filtersForm = null,
+  fictionTypeInput = null,
+  ageRatingInput = null,
+  resultsStatus = null,
+  resultsError = null,
+  resultsList = null,
+  createElement = null,
+  searchBooksApiImpl = searchBooksApi,
+  fallbackBooks = mockBooks,
+} = {}) {
+  const searchParams = createDefaultSearchParams();
+  let isLoading = false;
+
+  function renderResults(results) {
+    if (!resultsList || !resultsStatus || typeof createElement !== "function") {
+      return;
+    }
+
+    resultsList.replaceChildren();
+
+    if (!results.length) {
+      resultsStatus.textContent = "No books matched your search and filters.";
+      return;
+    }
+
+    resultsStatus.textContent = `${results.length} result(s) shown.`;
+
+    for (const item of results) {
+      const row = createElement("li");
+      row.className = "result-item";
+
+      const title = createElement("h3");
+      title.textContent = item.title;
+
+      const author = createElement("p");
+      author.className = "result-author";
+      author.textContent = `Author: ${item.author}`;
+
+      const meta = createElement("p");
+      meta.className = "result-meta";
+      meta.textContent =
+        `Type: ${formatFictionType(item.fictionType)} | ` +
+        `Age: ${formatAgeRating(item.ageRating)} | ` +
+        `Spice: ${formatSpiceLevel(item.spiceLevel)}`;
+
+      const snippet = createElement("p");
+      snippet.className = "result-snippet";
+      snippet.textContent = item.snippet;
+
+      const subjects = createElement("p");
+      subjects.className = "result-subjects";
+      subjects.textContent = `Subject(s): ${item.subjects.join(", ") || "none"}`;
+
+      row.append(title, author, meta, snippet, subjects);
+      resultsList.append(row);
+    }
   }
 
-  return Array.from(filtersForm.querySelectorAll('input[name="subject"]:checked')).map((input) =>
-    input.value.toLowerCase()
-  );
-}
-
-function syncSearchParamsFromInputs() {
-  searchParams.query = searchInput ? searchInput.value.trim() : "";
-  searchParams.fictionType = fictionTypeInput ? fictionTypeInput.value : "all";
-  searchParams.ageRating = ageRatingInput ? ageRatingInput.value : "all";
-  searchParams.subjects = getSelectedSubjects();
-
-  if (filtersForm) {
-    const spiceChoice = filtersForm.querySelector('input[name="spice_level"]:checked');
-    searchParams.spiceLevel = spiceChoice ? spiceChoice.value : "any";
-  } else {
-    searchParams.spiceLevel = "any";
-  }
-}
-
-function setLoadingState(loading) {
-  isLoading = loading;
-
-  if (searchButton) {
-    searchButton.disabled = loading;
-    searchButton.textContent = loading ? "Searching..." : "Search";
+  function filterMockBooks(params) {
+    return filterBooksCollection(fallbackBooks, params);
   }
 
-  if (filtersForm) {
-    for (const control of filtersForm.elements) {
-      if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement) {
-        control.disabled = loading;
+  function getSelectedSubjects() {
+    if (!filtersForm || typeof filtersForm.querySelectorAll !== "function") {
+      return [];
+    }
+
+    return Array.from(filtersForm.querySelectorAll('input[name="subject"]:checked')).map(
+      (input) => input.value.toLowerCase()
+    );
+  }
+
+  function syncSearchParamsFromInputs() {
+    searchParams.query = searchInput ? searchInput.value.trim() : "";
+    searchParams.fictionType = fictionTypeInput ? fictionTypeInput.value : "all";
+    searchParams.ageRating = ageRatingInput ? ageRatingInput.value : "all";
+    searchParams.subjects = getSelectedSubjects();
+
+    if (filtersForm && typeof filtersForm.querySelector === "function") {
+      const spiceChoice = filtersForm.querySelector('input[name="spice_level"]:checked');
+      searchParams.spiceLevel = spiceChoice ? spiceChoice.value : "any";
+    } else {
+      searchParams.spiceLevel = "any";
+    }
+  }
+
+  function setLoadingState(loading) {
+    isLoading = loading;
+
+    if (searchButton) {
+      searchButton.disabled = loading;
+      searchButton.textContent = loading ? "Searching..." : "Search";
+    }
+
+    if (filtersForm && filtersForm.elements) {
+      for (const control of filtersForm.elements) {
+        if (control && typeof control === "object" && "disabled" in control) {
+          control.disabled = loading;
+        }
       }
     }
-  }
 
-  if (searchInput) {
-    searchInput.disabled = loading;
-  }
-}
-
-function setErrorMessage(message) {
-  if (!resultsError) {
-    return;
-  }
-
-  if (!message) {
-    resultsError.hidden = true;
-    resultsError.textContent = "";
-    return;
-  }
-
-  resultsError.hidden = false;
-  resultsError.textContent = message;
-}
-
-function buildUserFacingError(error) {
-  if (error instanceof BooksApiError) {
-    if (error.status !== null) {
-      return `Live API request failed (${error.status}). Showing fallback results.`;
+    if (searchInput) {
+      searchInput.disabled = loading;
     }
-    return "Unable to reach live API. Showing fallback results.";
-  }
-  return "Search request failed. Showing fallback results.";
-}
-
-async function runSearch() {
-  if (isLoading) {
-    return;
   }
 
-  syncSearchParamsFromInputs();
-  setErrorMessage("");
-  setLoadingState(true);
+  function setErrorMessage(message) {
+    if (!resultsError) {
+      return;
+    }
 
-  if (resultsStatus) {
-    resultsStatus.textContent = "Loading results...";
+    if (!message) {
+      resultsError.hidden = true;
+      resultsError.textContent = "";
+      return;
+    }
+
+    resultsError.hidden = false;
+    resultsError.textContent = message;
   }
 
-  try {
-    const apiResults = await searchBooksApi(searchParams);
-    const filteredResults = filterBooksCollection(apiResults, searchParams);
-    renderResults(filteredResults);
-  } catch (error) {
-    setErrorMessage(buildUserFacingError(error));
-    const fallbackResults = filterMockBooks(searchParams);
-    renderResults(fallbackResults);
-  } finally {
-    setLoadingState(false);
+  function buildUserFacingError(error) {
+    if (error instanceof BooksApiError) {
+      if (error.status !== null) {
+        return `Live API request failed (${error.status}). Showing fallback results.`;
+      }
+      return "Unable to reach live API. Showing fallback results.";
+    }
+    return "Search request failed. Showing fallback results.";
   }
-}
 
-if (searchForm) {
-  searchForm.addEventListener("submit", async (event) => {
+  async function runSearch() {
+    if (isLoading) {
+      return;
+    }
+
+    syncSearchParamsFromInputs();
+    const paramsSnapshot = cloneSearchParams(searchParams);
+    setErrorMessage("");
+    setLoadingState(true);
+
+    if (resultsStatus) {
+      resultsStatus.textContent = "Loading results...";
+    }
+
+    try {
+      const apiResults = await searchBooksApiImpl(paramsSnapshot);
+      const filteredResults = filterBooksCollection(apiResults, paramsSnapshot);
+      renderResults(filteredResults);
+    } catch (error) {
+      setErrorMessage(buildUserFacingError(error));
+      const fallbackResults = filterMockBooks(paramsSnapshot);
+      renderResults(fallbackResults);
+    } finally {
+      setLoadingState(false);
+    }
+  }
+
+  async function onSubmit(event) {
     event.preventDefault();
     await runSearch();
-  });
+  }
+
+  async function onFiltersChange() {
+    await runSearch();
+  }
+
+  function attachEventHandlers() {
+    if (searchForm && typeof searchForm.addEventListener === "function") {
+      searchForm.addEventListener("submit", onSubmit);
+    }
+
+    if (filtersForm && typeof filtersForm.addEventListener === "function") {
+      filtersForm.addEventListener("change", onFiltersChange);
+    }
+  }
+
+  function getSearchParams() {
+    return cloneSearchParams(searchParams);
+  }
+
+  return {
+    attachEventHandlers,
+    runSearch,
+    syncSearchParamsFromInputs,
+    getSearchParams,
+  };
 }
 
-if (filtersForm) {
-  filtersForm.addEventListener("change", async () => {
-    await runSearch();
+export function initializeSearchApp({
+  documentRef = globalThis.document,
+  searchBooksApiImpl = searchBooksApi,
+  fallbackBooks = mockBooks,
+} = {}) {
+  if (!documentRef || typeof documentRef.querySelector !== "function") {
+    return null;
+  }
+
+  const searchForm = documentRef.querySelector("#search-form");
+  const searchInput = documentRef.querySelector("#search-input");
+  const filtersForm = documentRef.querySelector("#filters-form");
+  const fictionTypeInput = documentRef.querySelector("#filter-fiction-type");
+  const ageRatingInput = documentRef.querySelector("#filter-age-rating");
+  const resultsStatus = documentRef.querySelector("#results-status");
+  const resultsError = documentRef.querySelector("#results-error");
+  const resultsList = documentRef.querySelector("#results-list");
+  const searchButton =
+    searchForm && typeof searchForm.querySelector === "function"
+      ? searchForm.querySelector('button[type="submit"]')
+      : null;
+
+  const app = createSearchApp({
+    searchForm,
+    searchInput,
+    searchButton,
+    filtersForm,
+    fictionTypeInput,
+    ageRatingInput,
+    resultsStatus,
+    resultsError,
+    resultsList,
+    createElement: (tagName) => documentRef.createElement(tagName),
+    searchBooksApiImpl,
+    fallbackBooks,
   });
+  app.attachEventHandlers();
+  return app;
+}
+
+if (typeof document !== "undefined") {
+  initializeSearchApp();
 }

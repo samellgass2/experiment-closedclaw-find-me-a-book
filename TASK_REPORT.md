@@ -50,3 +50,26 @@ Observed results:
 - `tests/test_root_config.py`
 - `STATUS.md`
 - `TASK_REPORT.md`
+
+## Workflow 35 Follow-up (Bug: frontend entrypoint on :8000)
+- Updated backend routing so `/` serves `frontend/index.html`.
+- Added `/health` for backend health JSON previously returned by `/`.
+- Added static asset route support from `frontend/` so app files load at root origin.
+- Added focused tests in `tests/test_frontend_serving.py` for:
+  - `/` returning HTML with `#search-input`
+  - `/api/books.js` frontend module availability
+- Ran browser acceptance with Playwright Chromium against `http://localhost:8000`:
+  - Verified `#search-input`, `#filters-form`, and Search button render.
+
+### Workflow 35 Validation
+Commands run:
+1. `python -m pytest tests/ -q`
+2. `python -m pytest tests/test_performance_security_smoke.py::SearchPerformanceSmokeTests::test_representative_filter_queries_stay_within_p95_budget -q`
+3. `python -m unittest discover -s tests -p 'test*.py'`
+
+Observed results:
+- Full pytest run: 1 failing test unrelated to this routing bug:
+  - `tests/test_performance_security_smoke.py::SearchPerformanceSmokeTests::test_representative_filter_queries_stay_within_p95_budget`
+  - Failure reason: p95 latency budget exceeded for repository query scenario.
+- Targeted rerun of failing performance test: still failing with the same p95 budget assertion.
+- `unittest` discovery run: PASS.

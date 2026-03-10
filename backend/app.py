@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
-from flask import Flask, jsonify, request
+from flask import Flask, abort, jsonify, request, send_from_directory
 
 from .config import AppConfig, load_app_config
 from .repositories.books import (
@@ -118,6 +119,8 @@ def create_app(config: AppConfig | None = None) -> Flask:
     runtime_config = config or load_app_config()
     _configure_logging(runtime_config.log_level)
 
+    frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
+
     app = Flask(__name__)
     app.config["DEBUG"] = runtime_config.debug
     app.config["DATABASE_CONFIG"] = runtime_config.database.as_dict
@@ -125,13 +128,23 @@ def create_app(config: AppConfig | None = None) -> Flask:
     logger = logging.getLogger("backend.app")
     logger.info("Initialized backend app with MySQL host %s", runtime_config.database.host)
 
-    @app.get("/")
+    @app.get("/health")
     def health() -> tuple[dict[str, Any], int]:
         payload = {
             "status": "ok",
             "service": "find-me-a-book-backend",
         }
         return jsonify(payload), 200
+
+    @app.get("/")
+    def index() -> Any:
+        return send_from_directory(frontend_dir, "index.html")
+
+    @app.get("/<path:asset_path>")
+    def frontend_asset(asset_path: str) -> Any:
+        if asset_path.startswith("api/") and asset_path != "api/books.js":
+            abort(404)
+        return send_from_directory(frontend_dir, asset_path)
 
     @app.get("/api/books")
     @app.get("/api/books/search")

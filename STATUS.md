@@ -1,3 +1,25 @@
+# Status Update: Task 264
+
+## Frontend Search Input and Basic Results List
+
+- Implemented a functional search interaction in `frontend/main.js` that
+  handles form submit events client-side and updates the results list without
+  reloading the page.
+- Search UI in `frontend/index.html` includes a labeled text input (`label`
+  bound to `#search-input`) and submit button inside a semantic `form`
+  (`role="search"`), supporting both button click and Enter key submission.
+- Results rendering now outputs book title, author, and a short snippet for
+  each row, using semantic list markup in the main results region.
+- Added an expanded mock catalog (`12` items) so layout behavior can be
+  validated with at least 10 visible records.
+- Data-source behavior is isolated through dedicated functions:
+  - `fetchBooksFromApi(query)` for live API lookups.
+  - `filterMockBooks(query)` for fixture-backed search.
+  - `searchBooks(query)` orchestrates API-first with mock fallback, making a
+    future switch to API-only straightforward.
+- Current data source status: mocked fixture data is available and used as a
+  fallback when the real API is unavailable or returns an error.
+
 # Status Update: Task 244
 
 ## Core Backend API for Book Search and Filter Endpoints

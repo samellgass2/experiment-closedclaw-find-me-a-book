@@ -1,39 +1,32 @@
-# Task Report: TASK_ID=244 RUN_ID=449
+# Task Report: TASK_ID 267
 
 ## Summary
-Added an automated backend API test suite for `/api/books` with isolated MySQL schema setup, seeded fixtures, search/filter coverage, combined-filter assertions, and invalid-parameter validation.
+Implemented a minimal frontend test suite for search and filter behavior and made the frontend app wiring testable without adding external test libraries.
 
-## Changes
-1. Added `tests/test_books_api.py`.
-2. Implemented isolated integration test lifecycle:
-   - creates temporary schema per run
-   - applies `db/migrations/001_init.sql`
-   - seeds representative books/authors/genres
-   - drops schema after tests
-3. Added API assertions for:
-   - free-text search hit and empty result
-   - `genre`, `age_min/age_max`, `subject`, `spice_level`
-   - combined filter intersections
-   - invalid `age_min` with `400` + JSON error payload
-4. Updated `STATUS.md` with:
-   - run command
-   - required environment variables
-   - coverage summary for core book search/filter endpoint tests
+## Changes Made
+- Refactored `frontend/main.js`:
+  - Added `createSearchApp(...)` for dependency-injected, testable search/filter behavior.
+  - Added `initializeSearchApp(...)` to wire DOM elements in browser runtime.
+  - Kept automatic browser initialization (`initializeSearchApp()` when `document` exists).
+- Added `frontend/tests/search_filters.test.js` with 3 high-value tests:
+  - search input + submit button interaction and query propagation to API client,
+  - filter change propagation into API request params,
+  - results list/status updates when API response data changes.
+- Added `frontend/package.json` to run frontend tests via Node built-in test runner.
+- Updated `STATUS.md` with test coverage summary and run instructions.
+
+## Test Commands and Results
+1. `cd frontend && npm test`
+   - PASS (3/3 frontend tests)
+2. `python -m unittest discover tests`
+   - PASS (`Ran 46 tests`, `OK`, `skipped=18`)
+3. `python -m pytest tests/ -q`
+   - Not available in environment (`No module named pytest`)
 
 ## Acceptance Criteria Mapping
-1. `tests/` contains focused API module: `tests/test_books_api.py`.
-2. Single documented command from repo root is provided in `STATUS.md`: `python -m unittest tests.test_books_api -v`.
-3. Search behavior tests include matching and empty-list cases.
-4. Filter tests cover `genre`, `age_min/age_max`, `subject`, `spice_level`, plus combined filters.
-5. Invalid filter handling test verifies `400` JSON error for non-numeric `age_min`.
-6. `STATUS.md` documents run instructions, env vars, and endpoint coverage summary.
-
-## Validation
-Command run:
-```bash
-python -m unittest tests.test_books_api -v
-```
-
-Result in this runner:
-- `OK (skipped=8)`
-- Skips are due to missing `Flask` and `PyMySQL` packages in this environment; test module is designed to run fully when dependencies are installed.
+1. New frontend test file: PASS (`frontend/tests/search_filters.test.js`)
+2. Search input/button interaction test: PASS
+3. Filter change updates API params test: PASS
+4. Results update test for changed data: PASS
+5. Documented test command runs successfully: PASS (`cd frontend && npm test`)
+6. STATUS.md updated with run instructions and coverage: PASS

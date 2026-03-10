@@ -1,0 +1,8 @@
+{
+  "name": "find-me-a-book-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/search_filters.test.js"
+  }
+}

@@ -1,3 +1,69 @@
+# Status Update: Task 335
+
+## Open Library Field Normalization Utilities
+
+- Added new module: `crawler/normalization.py`.
+- Added public entry point:
+  - `normalize_openlibrary_book(raw_book: dict[str, Any]) -> NormalizedOpenLibraryBook`
+- The module is pure and deterministic:
+  - no network calls,
+  - no database I/O,
+  - depends only on standard library + `crawler.taxonomy_config` accessors.
+
+### Normalized Output Fields
+
+`normalize_openlibrary_book(...)` returns a dictionary ready for persistence,
+including:
+
+- `title`
+- `authors`
+- `canonical_genres`
+- `canonical_plot_tags`
+- `canonical_character_dynamics`
+- `genres` (alias of `canonical_genres`)
+- `plot_tags` (alias of `canonical_plot_tags`)
+- `character_dynamics` (alias of `canonical_character_dynamics`)
+- `age_band`
+- `spice_level`
+- `source`
+- `taxonomy_version`
+
+### Heuristic Coverage (v1)
+
+- Genre mapping: keyword + synonym + Open Library subject hint matching against
+  canonical IDs from `get_all_genres()`.
+- Plot tag mapping: weighted phrase detection via centralized
+  `PLOT_TAG_KEYWORD_MAP`.
+- Character dynamics mapping: deterministic phrase matching via
+  `CHARACTER_DYNAMIC_KEYWORD_MAP`.
+- Age band inference: weighted keyword scoring over
+  `middle-grade`, `young-adult`, `new-adult`, `adult`.
+- Spice level inference: weighted rank scoring over canonical spice ranks 1-5,
+  with tie-breaking and age-band-aware adjustments.
+
+All mapping heuristics are encapsulated in table-driven constants and helper
+functions to keep behavior easy to extend.
+
+### Example Normalized Record
+
+```python
+{
+  "source": "openlibrary",
+  "taxonomy_version": "v1",
+  "title": "Orbit Hearts",
+  "authors": ["Dev Morgan", "Rin Vale"],
+  "description": "A young adult slow burn romance in a space academy.",
+  "canonical_genres": ["science-fiction", "young-adult"],
+  "canonical_plot_tags": ["slow-burn-romance", "competition"],
+  "canonical_character_dynamics": ["rivals"],
+  "genres": ["science-fiction", "young-adult"],
+  "plot_tags": ["slow-burn-romance", "competition"],
+  "character_dynamics": ["rivals"],
+  "age_band": "young-adult",
+  "spice_level": "spice-3-moderate",
+}
+```
+
 # Status Update: Task 334
 
 ## Open Library Crawler v1 Taxonomy Config

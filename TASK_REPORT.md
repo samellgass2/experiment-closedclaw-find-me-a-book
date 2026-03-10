@@ -1,68 +1,64 @@
 # TASK REPORT
 
 ## Task
-- TASK_ID: 334
-- RUN_ID: 574
-- Title: Define v1 taxonomy and config structures
+- TASK_ID: 335
+- RUN_ID: 578
+- Title: Implement Open Library field normalization utilities
 
 ## Summary of Work
-- Added a new pure-Python taxonomy configuration module:
-  - `crawler/taxonomy_config.py`
-- Implemented fixed, immutable v1 taxonomy dimensions with typed dataclasses:
-  - genres (`TaxonomyEntry`)
-  - plot tags (`TaxonomyEntry`)
-  - character dynamics (`TaxonomyEntry`)
-  - age bands (`AgeBandEntry`)
-  - spice levels (`SpiceLevelEntry`)
-- Added canonical identifiers and labels for every entry.
-- Included helper metadata fields (`synonyms`, and Open Library subject hints
-  where relevant for normalization).
-- Defined spice levels as an ordered 1-5 scale and added
-  `get_spice_level_by_rank(level)`.
-- Added accessors per taxonomy dimension so downstream code can consume
-  canonical data without coupling to internal constants.
-- Updated `STATUS.md` with a Task 334 entry describing file path, dimensions,
-  and downstream usage guidance.
+- Added a new normalization module:
+  - `crawler/normalization.py`
+- Implemented pure normalization entry point:
+  - `normalize_openlibrary_book(raw_book: dict[str, Any]) -> NormalizedOpenLibraryBook`
+- Added deterministic Open Library field extraction helpers for:
+  - title and description (string + `{value: ...}` shape)
+  - authors (`str`, `{name}`, and `{author: {name|key}}` forms)
+  - textual corpus aggregation from `subjects`, subject dimensions, and metadata
+- Implemented table-driven canonical taxonomy mapping for:
+  - genres
+  - plot tags
+  - character dynamics
+- Implemented weighted heuristic inference for:
+  - age band (`middle-grade`, `young-adult`, `new-adult`, `adult`)
+  - spice level (canonical ranks 1-5 mapped to taxonomy identifiers)
+- Output includes canonical taxonomy fields and compatibility aliases:
+  - `canonical_genres`, `canonical_plot_tags`,
+    `canonical_character_dynamics`
+  - `genres`, `plot_tags`, `character_dynamics`
+  - plus `age_band`, `spice_level`, `title`, `authors`, `description`,
+    `source`, `taxonomy_version`.
+- Updated `STATUS.md` with Task 335 documentation, public functions,
+  heuristic coverage, and normalized-record example.
 
 ## Acceptance Coverage
-1. New module exists and defines all required v1 dimensions:
-   - `crawler/taxonomy_config.py`
-2. Each entry includes stable `identifier` + human-readable `label`:
-   - enforced across all taxonomy entries.
-   - spice dimension represented with numeric `level` 1..5.
-3. Accessor coverage per dimension:
-   - `get_all_genres()`
-   - `get_all_plot_tags()`
-   - `get_all_character_dynamics()`
-   - `get_age_bands()`
-   - `get_spice_levels()`
-   - plus id/rank helpers.
-4. Module is static and pure-Python:
-   - no network/database/file I/O in taxonomy module.
-5. Import/compile validation completed:
-   - `python -m compileall crawler backend tests db`
-   - ad-hoc import script successfully imported taxonomy accessors.
-6. Status document updated:
-   - `STATUS.md` now contains Task 334 section with usage guidance.
+1. New module and main function exist:
+   - `crawler/normalization.py`
+   - `normalize_openlibrary_book(...)`
+2. Normalized output contains required taxonomy-oriented fields:
+   - `genres`, `plot_tags`, `character_dynamics`, `age_band`, `spice_level`
+3. Normalization is pure and local:
+   - standard library + `crawler.taxonomy_config` only
+   - no network or DB I/O
+4. Heuristics are encapsulated in extendable mapping tables:
+   - centralized keyword/weight maps (no scattered ad hoc checks)
+5. Added tests with required scenarios:
+   - `tests/test_normalization.py`
+   - children/low spice, YA/medium spice, adult/high spice
+6. Status documentation updated:
+   - `STATUS.md` includes Task 335 section with module path,
+     entry points, and output example.
 
 ## Validation / Test Execution
 Commands run:
-1. `python --version`
-2. `python -m compileall crawler backend tests db`
-3. `python -m pytest tests/ -q` (not available: `No module named pytest`)
-4. `python -m unittest discover` (no tests discovered from repo root)
-5. `python -m unittest discover -s tests -p 'test*.py'`
-6. `python - <<'PY' ... import crawler.taxonomy_config ... PY`
+1. `python -m unittest tests.test_normalization -v`
+2. `python -m unittest discover -s tests -p 'test*.py'`
 
 Observed results:
-- Compileall completed without errors.
-- Full unittest discovery against `tests/` passed:
-  - `Ran 75 tests in 7.581s`
-  - `OK (skipped=23)`
-- Taxonomy import sanity check output:
-  - `v1 16 16 13 4 [1, 2, 3, 4, 5]`
+- `tests.test_normalization`: `Ran 3 tests ... OK`
+- Full suite: `Ran 78 tests ... OK (skipped=23)`
 
 ## Files Changed
-- `crawler/taxonomy_config.py` (new)
+- `crawler/normalization.py` (new)
+- `tests/test_normalization.py` (new)
 - `STATUS.md` (updated)
 - `TASK_REPORT.md` (updated)

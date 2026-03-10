@@ -1,67 +1,65 @@
-# Task Report: TASK_ID=273 RUN_ID=473
+# TASK REPORT
 
-## Summary
-Implemented performance tuning and validation for advanced book filtering and
-relevance ranking in the search query layer.
+## Task
+- TASK_ID: 304
+- RUN_ID: 534
+- Title: Add basic performance and security smoke tests
 
-## Delivered Changes
+## Summary of Work
+- Added new smoke test module:
+  - `tests/test_performance_security_smoke.py`
+- Implemented automated performance smoke coverage:
+  - `SearchPerformanceSmokeTests` creates an isolated MySQL schema,
+    applies `db/migrations/*.sql`, seeds 1200 representative rows, and runs
+    representative filter/search scenarios through `BookRepository.search(...)`.
+  - Tests assert p95 latency budgets per scenario.
+- Implemented automated security smoke coverage:
+  - verifies untrusted filter/query values do not appear in SQL text,
+  - verifies placeholder/parameter parity (`%s` count == params count),
+  - verifies execution path uses `execute(sql, params)` with tuple params,
+  - adds AST guard that fails if `_build_books_query` interpolates user-input
+    variables directly into SQL fragments.
+- Added config hygiene smoke coverage:
+  - scans testing strategy and example config artifacts for committed concrete
+    `DEV_MYSQL_PASSWORD` values.
+- Updated `TESTING_STRATEGY.md` with explicit prerequisites and runnable
+  commands for performance/security smoke checks.
+- Updated `STATUS.md` with current performance/security coverage and limitations.
 
-- Refactored `backend/repositories/books.py` query generation:
-  - Added `candidate_books` CTE to filter/order/limit before heavy aggregation.
-  - Expanded weighted relevance scoring across query text, genre, age rating,
-    spice level, subject matter, plot points, and character dynamics.
-  - Added query-level comment explaining the EXPLAIN-driven CTE choice.
-- Added migration `db/migrations/002_search_indexes.sql` for search-path
-  indexes including FULLTEXT on `(books.title, books.description)`.
-- Updated `db/schema.sql` to include the same index definitions.
-- Added reproducible benchmark script:
-  - `scripts/benchmark_search_performance.py`
-  - Creates temp schema, applies migrations, seeds representative data,
-    benchmarks multiple filter/query combinations, checks p95 budget,
-    and prints EXPLAIN-derived index usage.
-- Added ranking integration tests:
-  - `tests/test_relevance_ranking.py`
-  - Validates stronger multi-criteria matches rank above weaker matches.
-  - Validates changing `spice_level` changes top result.
-- Updated query-shape tests (`tests/test_books_repository_filters.py`) to match
-  CTE-based SQL.
-- Updated migration usage in API integration setup (`tests/test_books_api.py`)
-  to apply all migrations.
-- Updated `STATUS.md` with performance profile, indexing actions, and relevance
-  weight rationale.
+## Acceptance Coverage
+1. At least one automated performance test/script with thresholds:
+   - `tests/test_performance_security_smoke.py::SearchPerformanceSmokeTests`
+     enforces p95 budgets.
+   - Existing `scripts/benchmark_search_performance.py` remains budget-gated.
+2. Security checks for parameterized query paths and regression guard:
+   - `RepositorySecuritySmokeTests` validates parameterized SQL behavior and
+     includes a static guard that fails on raw user-input interpolation.
+3. Commands/prereqs documented:
+   - `TESTING_STRATEGY.md` includes environment exports and concrete commands.
+4. Documented commands complete successfully:
+   - ran smoke tests and benchmark command successfully in this run.
+5. Status updated:
+   - `STATUS.md` now includes Task 304 summary and limitations.
 
-## Acceptance Criteria Mapping
+## Validation / Test Execution
+Commands run:
+1. `python -m unittest tests.test_performance_security_smoke -v`
+2. `python scripts/benchmark_search_performance.py --seed-size 1200 --warmup 2 --iterations 8 --budget-ms 400`
+3. `python -m unittest discover -s tests -p 'test*.py'`
 
-1. Reproducible performance checks:
-   - `scripts/benchmark_search_performance.py` added and runnable.
-2. Index migration/documentation:
-   - `db/migrations/002_search_indexes.sql` added with key filter indexes.
-3. EXPLAIN-informed tuning and docs:
-   - query refactor in `backend/repositories/books.py` + inline rationale.
-4. Relevance tests and spice-level top-result change:
-   - `tests/test_relevance_ranking.py` added with both assertions.
-5. Status documentation:
-   - `STATUS.md` updated with timings, index changes, and scoring rationale.
+Environment used:
+- `DEV_MYSQL_HOST=dev-mysql`
+- `DEV_MYSQL_PORT=3306`
+- `DEV_MYSQL_USER=devagent`
+- `DEV_MYSQL_PASSWORD=<provided in task env>`
 
-## Validation Run
+Observed results:
+- Smoke suite: `Ran 5 tests ... OK`
+- Benchmark script: all scenarios passed budget (`p95 <= 400ms`)
+- Full unittest discovery: `Ran 75 tests ... OK (skipped=23)`
 
-Commands executed:
-
-```bash
-python -m unittest discover tests -q
-DEV_MYSQL_HOST=dev-mysql DEV_MYSQL_PORT=3306 DEV_MYSQL_USER=devagent DEV_MYSQL_PASSWORD=*** DEV_MYSQL_DATABASE=dev_find_me_a_book python -m unittest tests.test_relevance_ranking -q
-DEV_MYSQL_HOST=dev-mysql DEV_MYSQL_PORT=3306 DEV_MYSQL_USER=devagent DEV_MYSQL_PASSWORD=*** python scripts/benchmark_search_performance.py --seed-size 1200 --iterations 8 --warmup 2 --budget-ms 400
-```
-
-Observed benchmark profile (seed=1200):
-
-- fantasy-low-spice: p95 71.77ms
-- scifi-teen: p95 74.56ms
-- romance-high: p95 75.02ms
-- browse-mystery: p95 13.32ms
-
-All measured queries passed p95 budget <= 400ms.
-
-## Commit
-
-`6f6a35b` `task/273: optimize search ranking, indexing, and performance validation`
+## Files Changed
+- `tests/test_performance_security_smoke.py` (new)
+- `TESTING_STRATEGY.md` (updated)
+- `STATUS.md` (updated)
+- `TASK_REPORT.md` (updated)

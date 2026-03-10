@@ -1,3 +1,246 @@
+# Tester Report: Workflow #29 (End-to-End Testing, Bug Fixes, and QA Stabilization)
+
+Date: 2026-03-10
+Branch: `workflow/29/dev`
+Role: TESTER (verification only, no code changes)
+
+## Tests Run and Results
+
+1. `python --version`
+   - `Python 3.12.13`
+2. `python -m pytest tests/ -q`
+   - `75 passed in 4.48s`
+3. `python -m pytest -q`
+   - `75 passed in 4.10s`
+4. `python db/setup_database.py` with `DEV_MYSQL_*` set
+   - `Database created successfully, schema applied, and validation queries passed.`
+5. `python -m pytest tests/test_integration_filtering.py -q` with `DEV_MYSQL_*` set
+   - `5 passed in 0.66s`
+6. `python -m pytest tests/test_crawler_validation_smoke.py -q` with `DEV_MYSQL_*` set
+   - `3 passed in 0.69s`
+7. `python -m pytest tests/test_performance_security_smoke.py -q` with `DEV_MYSQL_*` set
+   - `5 passed in 2.73s`
+8. `python -m unittest discover -s tests -p 'test*.py'`
+   - `Ran 75 tests in 3.753s`
+   - `OK`
+9. `python scripts/benchmark_search_performance.py --seed-size 1200 --warmup 2 --iterations 8 --budget-ms 400` with `DEV_MYSQL_*` set
+   - Completed successfully
+   - All benchmark scenarios passed budget check (`p95 <= 400ms`)
+
+## Task Acceptance Verdicts
+
+- Task #300: PASS
+  - `TESTING_STRATEGY.md` exists with unit/integration/crawler/performance/security plan, concrete module scope from code audit, run commands, and no unresolved TODO placeholders.
+  - `STATUS.md` includes Task #300 audit summary and strategy reference.
+- Task #301: PASS
+  - `tests/test_books_repository_filtering_units.py` imports real query-layer module (`backend.repositories.books`) and covers:
+    - single genre filter,
+    - combined criteria (`genre + age_rating`),
+    - empty/invalid filter behavior,
+    - positive and negative match assertions.
+  - Documented command path runs successfully.
+  - `STATUS.md` documents coverage and exact unit-test command.
+- Task #302: PASS
+  - `tests/test_integration_filtering.py` uses real schema setup via `db/setup_database.py` + migrations.
+  - Seeds representative dataset including crawler-relevant fields (`source_provider`, `external_source_id`, `description`, `maturity_rating`) and linked tables.
+  - Executes production query paths and passes with documented DB setup.
+  - `STATUS.md` includes integration scope, assumptions, and limitations.
+- Task #303: PASS
+  - `tests/test_crawler_validation_smoke.py` exercises crawler logic with fixtures/mocks (no live Goodreads calls).
+  - Validates critical field mapping (title, author, genre, maturity/subject-bearing description).
+  - Includes smoke path from crawler-inserted data to repository filtering query results.
+  - Crawler tests run successfully offline.
+  - `STATUS.md` includes assumptions and run instructions.
+- Task #304: PASS
+  - Performance smoke tests and benchmark script exist with explicit latency thresholds/budgets.
+  - Security smoke tests verify parameterization and include static guard against unsafe SQL interpolation in query builder.
+  - Commands and prerequisites are documented in `TESTING_STRATEGY.md` and `STATUS.md`.
+  - Documented performance/security checks complete successfully.
+  - `STATUS.md` summarizes scope and limitations.
+
+## Integration/Cohesion Check
+
+- No cross-task regressions observed in this branch.
+- Unit, integration, crawler, performance, and security checks run cohesively and pass.
+
+## Bugs Filed
+
+- None.
+
+## Overall Verdict
+
+`CLEAN`
+
+# Status Update: Task 304
+
+## Performance and Security Smoke Tests
+
+- Added new smoke-test module:
+  `tests/test_performance_security_smoke.py`.
+- Added automated performance smoke coverage:
+  - `SearchPerformanceSmokeTests` provisions an isolated MySQL schema,
+    applies `db/migrations/*.sql`, seeds 1200 deterministic rows, and runs
+    representative `BookRepository.search(...)` filter scenarios.
+  - Enforces p95 latency budgets:
+    - query + genre + subject + spice filter path: `<= 450ms`
+    - query + age rating + character dynamics path: `<= 450ms`
+    - browse/filter-only path: `<= 300ms`
+- Added automated security smoke coverage:
+  - verifies untrusted query/filter values are parameterized (kept out of SQL
+    text and passed as `%s` params),
+  - verifies `_query_books` calls driver `execute(sql, params)` with a tuple,
+  - AST guard fails if `_build_books_query` interpolates user-input variables
+    directly into SQL fragments via f-strings.
+- Added configuration hygiene smoke coverage:
+  - `ConfigSecretSmokeTests` scans strategy/example files and fails if a
+    concrete `DEV_MYSQL_PASSWORD` value is committed.
+
+### How To Run
+
+```bash
+export DEV_MYSQL_HOST=dev-mysql
+export DEV_MYSQL_PORT=3306
+export DEV_MYSQL_USER=devagent
+export DEV_MYSQL_PASSWORD=<password>
+python -m unittest tests.test_performance_security_smoke -v
+python scripts/benchmark_search_performance.py --seed-size 1200 --warmup 2 --iterations 8 --budget-ms 400
+```
+
+### Current Limitations / Risks
+
+- Performance timing uses wall-clock checks in shared dev-runner infrastructure;
+  thresholds are intentionally conservative to reduce false positives.
+- Secret scanning currently targets strategy/example artifacts and not all
+  Python test fixtures, to avoid blocking on benign fake credentials.
+- Static SQL interpolation checks are scoped to `_build_books_query`; future
+  query builder functions should either extend this guard or add equivalent
+  tests.
+
+# Status Update: Task 303
+
+## Crawler Validation and Smoke Tests
+
+- Added fixture-driven crawler validation module:
+  `tests/test_crawler_validation_smoke.py`.
+- Added offline Goodreads HTML fixtures used by tests:
+  - `tests/fixtures/goodreads/search_result_sample.html`
+  - `tests/fixtures/goodreads/book_detail_sample.html`
+- New validation coverage (no live Goodreads access):
+  - Runs `GoodreadsCrawler` against mocked HTML fetch responses.
+  - Persists parsed records through `MySQLBookRepository.upsert_book(...)`.
+  - Asserts critical crawler-populated fields are mapped into schema tables:
+    - `books.title`
+    - `book_authors -> authors.full_name`
+    - `book_genres -> genres.display_name`
+    - additional attribute coverage via
+      `books.maturity_rating='general'` and subject-bearing description text.
+- Added crawler-to-query smoke path:
+  - inserts a crawled fixture book,
+  - queries through `BookRepository.search(...)` with
+    `BookFilterCriteria(query + genre + age_rating + subject_matter)`,
+  - verifies the crawled title appears in filter/search results.
+- Added mocked CLI-path test for `run_cli(...)` to confirm crawler/repository
+  orchestration works without network or real DB access.
+
+### How To Run Crawler Tests
+
+Run only crawler validation/smoke tests:
+
+```bash
+python -m unittest tests.test_crawler_validation_smoke -v
+```
+
+Run crawler-focused suite:
+
+```bash
+python -m unittest tests.test_goodreads_crawler tests.test_crawler_validation_smoke -v
+```
+
+### Assumptions and Limitations
+
+- Goodreads HTTP calls are fully mocked via offline fixtures to keep tests
+  deterministic and network-independent.
+- Integration parts require MySQL env vars:
+  `DEV_MYSQL_HOST`, `DEV_MYSQL_PORT`, `DEV_MYSQL_USER`,
+  `DEV_MYSQL_PASSWORD`.
+- Tests create and drop an isolated schema named
+  `dev_find_me_a_book_task303_crawler_*` per run.
+
+# Status Update: Task 302
+
+## Integration Tests for Database Filtering
+
+- Added a new MySQL integration module:
+  `tests/test_integration_filtering.py`.
+- The new tests create an isolated schema via `db/setup_database.setup_database`
+  using real migration files in `db/migrations/`.
+- Seeded fixture rows mimic crawler-ingested books by populating:
+  - `books.source_provider='goodreads'`
+  - `books.external_source_id`
+  - `books.description`
+  - `books.maturity_rating`
+  - linked `book_genres` and `book_authors` rows.
+- Added integration assertions that run through production query paths:
+  - `BookRepository.search(...)`
+  - `search_books_by_criteria(...)`
+- Covered filtering behaviors:
+  - genre + age range intersections
+  - spice level to maturity mapping
+  - subject filtering against `description` (not title-only matches)
+  - combined criteria (query + genre + age rating + subject/plot/character).
+
+### Schema and Runtime Assumptions
+
+- Tests rely on MySQL connectivity via `DEV_MYSQL_HOST`, `DEV_MYSQL_PORT`,
+  `DEV_MYSQL_USER`, and `DEV_MYSQL_PASSWORD`.
+- Test setup provisions and drops an ephemeral database per run
+  (`dev_find_me_a_book_task302_filter_*`).
+- The setup path depends on local `mysql` and `mysqladmin` binaries because it
+  calls `db/setup_database.py` utilities.
+
+### Known Limitations / Flakiness Risks
+
+- Tests are skipped when required MySQL environment variables are missing.
+- Runs will fail if the configured MySQL user cannot create/drop databases.
+- Timing-based schema naming is stable for local serial runs, but concurrent
+  runs on the same millisecond would collide (low likelihood).
+
+# Status Update: Task 300
+
+## Testing Audit and Strategy Baseline
+
+- Completed a code audit for backend filtering/query logic, database setup
+  utilities, and crawler parsing/persistence flow.
+- Added consolidated strategy document: `TESTING_STRATEGY.md` (repo root).
+
+### Key Components Identified for Coverage
+
+- Backend filtering and search:
+  - `backend/repositories/books.py`
+    - `BookRepository.search`, `list_books`, `search_books`
+    - `_build_books_query` relevance/filter SQL builder
+    - `_query_books`, `_is_timeout_error`, `_to_boolean_prefix_query`
+    - `BookFilterCriteria`, `search_books_by_criteria`
+- API filter validation and mapping:
+  - `backend/app.py`
+    - query param parsers (`_parse_single_query_param`,
+      `_parse_list_query_param`, `_parse_age_filter`)
+    - `GET /api/books`, `GET /api/books/search`, `GET /search`
+- Database setup and schema validation:
+  - `db/setup_database.py`
+    - `resolve_connection_params`, `build_client_args`,
+      `apply_migrations`, `validate_setup`, `setup_database`
+  - `db/migrations/001_init.sql`, `db/migrations/002_search_indexes.sql`
+- Crawler extraction and persistence:
+  - `crawler/goodreads_crawler.py`
+    - `GoodreadsCrawler.search_book_urls`, `fetch_book_record`, `_fetch_html`
+    - `MySQLBookRepository.upsert_book`
+    - `resolve_mysql_config`, helper normalization/parsing functions
+
+### Alignment Reference
+
+- Testing plan for unit/integration/crawler/performance/security coverage:
+  `TESTING_STRATEGY.md`
 # Status Update: Task 272
 
 ## Advanced Search API Filtering and Relevance Ranking
@@ -1653,3 +1896,100 @@ Validation: `PASS`
 
 ## Overall Verdict
 `PASS`
+
+## Status Update: Task 301 (Add unit tests for filtering and utilities)
+
+### What was added
+- Added `tests/test_books_repository_filtering_units.py` with focused unit coverage for:
+  - `backend/repositories/books.py::BookRepository.search`
+  - `backend/repositories/books.py::_to_boolean_prefix_query`
+  - `backend/repositories/books.py::_is_timeout_error`
+
+### New filtering unit coverage
+- Single-criterion filtering:
+  - verifies genre filter application (`genre="fantasy"`) and asserts positive matches (`Enchanted Grove`, `Dragon Oath`) and negative exclusions (`Starship Trials`, `Midnight Vows`).
+- Multi-criterion filtering:
+  - verifies genre + age-rating intersection (`genre="fantasy"` + `age_rating="YA"`) returns only the expected teen fantasy title.
+- Empty/invalid filtering behavior:
+  - empty criteria returns the unrestricted in-memory catalog.
+  - invalid `age_rating` value is ignored by repository query builder (no maturity predicate added), preserving full result set.
+
+### Utility function unit coverage
+- `_to_boolean_prefix_query` tokenization/prefix conversion for realistic terms.
+- `_to_boolean_prefix_query` fallback behavior for punctuation-only input.
+- `_is_timeout_error` handling for:
+  - known timeout error codes,
+  - timeout message text,
+  - non-timeout SQL errors.
+
+### Test execution
+- Exact command used for unit suite:
+  - `python -m unittest discover -s tests -p 'test*.py'`
+- Result in this run:
+  - `Ran 62 tests in 0.450s`
+  - `OK (skipped=23)`
+
+# QA Validation Summary: Workflow #29
+
+Date: 2026-03-10
+Branch validated: `workflow/29/dev`
+Validator role: QA validation agent (no code changes)
+
+## Commits Reviewed (`main..HEAD`)
+
+- `0fe5fa5` task/313: supervisor safety-commit (Codex omitted git commit)
+- `091a5a6` task/304: update task report
+- `67d2b17` task/304: add performance and security smoke tests
+- `0aae03f` task/303: add crawler validation and filtering smoke tests
+- `823b9f6` task/302: add integration tests for DB filtering
+- `535eee6` task/301: update run report for unit test coverage
+- `24a2beb` task/301: add unit tests for repository filtering utilities
+- `e3c9dc0` task/300: record audit run report
+- `7f54168` task/300: add testing strategy from codebase audit
+
+## Commands Run and Results
+
+1. `python --version`
+   - Result: `Python 3.12.13`
+2. `ls -d venv .venv 2>/dev/null || true`
+   - Result: no virtual environment directory found.
+3. `python -m pytest tests/ -q`
+   - Result: FAILED (`/usr/local/bin/python: No module named pytest`)
+4. `pytest tests/ -q`
+   - Result: FAILED (`pytest: command not found`)
+5. `python -m unittest discover -s tests -p 'test*.py'`
+   - Result: PASS (`Ran 75 tests in 3.624s`, `OK`, `skipped=23`)
+6. `python db/setup_database.py`
+   - Result: PASS (`Database created successfully, schema applied, and validation queries passed.`)
+7. `python -m unittest tests.test_books_repository_filtering_units -v`
+   - Result: PASS (`Ran 9 tests`, `OK`)
+8. `python -m unittest tests.test_integration_filtering -v`
+   - Result: PASS (`Ran 5 tests`, `OK`)
+9. `python -m unittest tests.test_crawler_validation_smoke -v`
+   - Result: PASS (`Ran 3 tests`, `OK`)
+10. `python -m unittest tests.test_performance_security_smoke -v`
+    - Result: PASS (`Ran 5 tests`, `OK`)
+11. `python scripts/benchmark_search_performance.py --seed-size 1200 --warmup 2 --iterations 8 --budget-ms 400`
+    - Result: PASS (`All benchmark queries passed budget check (p95 <= 400.00ms).`)
+12. `cd frontend && npm test`
+    - Result: PASS (`3 passed, 0 failed`)
+
+## Per-Task Acceptance Verdict
+
+- Task 300 (Audit codebase and define test strategy): PASS
+- Task 301 (Add unit tests for filtering and utilities): PASS
+- Task 302 (Implement integration tests for database filtering): PASS
+- Task 303 (Create crawler data validation and smoke tests): PASS
+- Task 304 (Add basic performance and security smoke tests): PASS
+
+## Workflow Goal Verification
+
+Workflow goal "End-to-End Testing, Bug Fixes, and QA Stabilization" is met for this branch:
+- Backend/query layer validated via unit + integration + security checks.
+- Data/crawler flow validated via fixture-based crawler tests and DB-backed smoke retrieval through the real filtering layer.
+- Frontend behavior validated via `frontend/tests/search_filters.test.js`.
+- Performance/security basics validated via smoke tests plus benchmark budget gate.
+
+## Overall Verdict
+
+PASS

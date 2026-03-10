@@ -1689,3 +1689,35 @@ Validation: `PASS`
 
 ## Overall Verdict
 `PASS`
+
+## Status Update: Task 301 (Add unit tests for filtering and utilities)
+
+### What was added
+- Added `tests/test_books_repository_filtering_units.py` with focused unit coverage for:
+  - `backend/repositories/books.py::BookRepository.search`
+  - `backend/repositories/books.py::_to_boolean_prefix_query`
+  - `backend/repositories/books.py::_is_timeout_error`
+
+### New filtering unit coverage
+- Single-criterion filtering:
+  - verifies genre filter application (`genre="fantasy"`) and asserts positive matches (`Enchanted Grove`, `Dragon Oath`) and negative exclusions (`Starship Trials`, `Midnight Vows`).
+- Multi-criterion filtering:
+  - verifies genre + age-rating intersection (`genre="fantasy"` + `age_rating="YA"`) returns only the expected teen fantasy title.
+- Empty/invalid filtering behavior:
+  - empty criteria returns the unrestricted in-memory catalog.
+  - invalid `age_rating` value is ignored by repository query builder (no maturity predicate added), preserving full result set.
+
+### Utility function unit coverage
+- `_to_boolean_prefix_query` tokenization/prefix conversion for realistic terms.
+- `_to_boolean_prefix_query` fallback behavior for punctuation-only input.
+- `_is_timeout_error` handling for:
+  - known timeout error codes,
+  - timeout message text,
+  - non-timeout SQL errors.
+
+### Test execution
+- Exact command used for unit suite:
+  - `python -m unittest discover -s tests -p 'test*.py'`
+- Result in this run:
+  - `Ran 62 tests in 0.450s`
+  - `OK (skipped=23)`

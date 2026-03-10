@@ -1,3 +1,39 @@
+# Status Update: Task 300
+
+## Testing Audit and Strategy Baseline
+
+- Completed a code audit for backend filtering/query logic, database setup
+  utilities, and crawler parsing/persistence flow.
+- Added consolidated strategy document: `TESTING_STRATEGY.md` (repo root).
+
+### Key Components Identified for Coverage
+
+- Backend filtering and search:
+  - `backend/repositories/books.py`
+    - `BookRepository.search`, `list_books`, `search_books`
+    - `_build_books_query` relevance/filter SQL builder
+    - `_query_books`, `_is_timeout_error`, `_to_boolean_prefix_query`
+    - `BookFilterCriteria`, `search_books_by_criteria`
+- API filter validation and mapping:
+  - `backend/app.py`
+    - query param parsers (`_parse_single_query_param`,
+      `_parse_list_query_param`, `_parse_age_filter`)
+    - `GET /api/books`, `GET /api/books/search`, `GET /search`
+- Database setup and schema validation:
+  - `db/setup_database.py`
+    - `resolve_connection_params`, `build_client_args`,
+      `apply_migrations`, `validate_setup`, `setup_database`
+  - `db/migrations/001_init.sql`, `db/migrations/002_search_indexes.sql`
+- Crawler extraction and persistence:
+  - `crawler/goodreads_crawler.py`
+    - `GoodreadsCrawler.search_book_urls`, `fetch_book_record`, `_fetch_html`
+    - `MySQLBookRepository.upsert_book`
+    - `resolve_mysql_config`, helper normalization/parsing functions
+
+### Alignment Reference
+
+- Testing plan for unit/integration/crawler/performance/security coverage:
+  `TESTING_STRATEGY.md`
 # Status Update: Task 272
 
 ## Advanced Search API Filtering and Relevance Ranking

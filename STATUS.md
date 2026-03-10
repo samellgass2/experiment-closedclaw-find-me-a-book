@@ -1,3 +1,167 @@
+# Status Update: Task 336
+
+## Wire Normalization into Crawler Ingestion Pipeline
+
+- Updated the crawler ingestion path in `crawler/goodreads_crawler.py` so every
+  crawled book now runs through `crawler.normalization.normalize_openlibrary_book(...)`
+  before persistence.
+- Normalization is applied inside `GoodreadsCrawler.fetch_book_record(...)` via
+  `build_taxonomy_enrichment(...)`, which builds a raw normalization payload from
+  parsed Goodreads fields (title, description, authors, genres/subjects).
+- The resulting canonical taxonomy fields are attached to `BookRecord` and then
+  written by `MySQLBookRepository.upsert_book(...)` in the same idempotent
+  `INSERT ... ON DUPLICATE KEY UPDATE` flow.
+- Persisted normalized fields now include:
+  - `taxonomy_version`
+  - `canonical_genres`
+  - `canonical_plot_tags`
+  - `canonical_character_dynamics`
+  - `age_band`
+  - `spice_level`
+  - plus derived `maturity_rating` mapped from taxonomy age/spice metadata.
+
+### CLI Behavior
+
+- Added crawler flag:
+  - `--normalize` / `--no-normalize`
+- Default behavior is normalization enabled (`--normalize`), aligned to v1
+  taxonomy ingestion requirements.
+- `--no-normalize` keeps crawler ingestion operational while bypassing enrichment.
+
+### Database Schema/Migration
+
+- Added migration `db/migrations/003_book_taxonomy_fields.sql` to append taxonomy
+  columns and lookup indexes on `books`.
+- Updated `db/schema.sql` snapshot with the same taxonomy columns.
+
+### Test Coverage Added/Updated
+
+- `tests/test_goodreads_crawler.py`
+  - validates normalization is invoked during crawler parsing and its output is
+    used to construct the persisted `BookRecord`.
+  - validates repository upsert SQL carries canonical taxonomy payload fields.
+- `tests/test_crawler_mysql_integration.py`
+  - validates DB rows include normalized taxonomy fields and that reruns update
+    existing rows without duplicates.
+- `tests/test_crawler_validation_smoke.py`
+  - validates fixture-driven crawl -> DB flow stores canonical taxonomy fields.
+  - validates CLI normalization default-on behavior and `--no-normalize` toggle.
+
+### Run Updated Ingestion Flow
+
+```bash
+python scripts/run_goodreads_crawler.py \
+  --query "young adult fantasy found family" \
+  --limit 10
+```
+
+Disable normalization explicitly (non-default):
+
+```bash
+python scripts/run_goodreads_crawler.py \
+  --query "young adult fantasy found family" \
+  --limit 10 \
+  --no-normalize
+```
+
+# Status Update: Task 335
+
+## Open Library Field Normalization Utilities
+
+- Added new module: `crawler/normalization.py`.
+- Added public entry point:
+  - `normalize_openlibrary_book(raw_book: dict[str, Any]) -> NormalizedOpenLibraryBook`
+- The module is pure and deterministic:
+  - no network calls,
+  - no database I/O,
+  - depends only on standard library + `crawler.taxonomy_config` accessors.
+
+### Normalized Output Fields
+
+`normalize_openlibrary_book(...)` returns a dictionary ready for persistence,
+including:
+
+- `title`
+- `authors`
+- `canonical_genres`
+- `canonical_plot_tags`
+- `canonical_character_dynamics`
+- `genres` (alias of `canonical_genres`)
+- `plot_tags` (alias of `canonical_plot_tags`)
+- `character_dynamics` (alias of `canonical_character_dynamics`)
+- `age_band`
+- `spice_level`
+- `source`
+- `taxonomy_version`
+
+### Heuristic Coverage (v1)
+
+- Genre mapping: keyword + synonym + Open Library subject hint matching against
+  canonical IDs from `get_all_genres()`.
+- Plot tag mapping: weighted phrase detection via centralized
+  `PLOT_TAG_KEYWORD_MAP`.
+- Character dynamics mapping: deterministic phrase matching via
+  `CHARACTER_DYNAMIC_KEYWORD_MAP`.
+- Age band inference: weighted keyword scoring over
+  `middle-grade`, `young-adult`, `new-adult`, `adult`.
+- Spice level inference: weighted rank scoring over canonical spice ranks 1-5,
+  with tie-breaking and age-band-aware adjustments.
+
+All mapping heuristics are encapsulated in table-driven constants and helper
+functions to keep behavior easy to extend.
+
+### Example Normalized Record
+
+```python
+{
+  "source": "openlibrary",
+  "taxonomy_version": "v1",
+  "title": "Orbit Hearts",
+  "authors": ["Dev Morgan", "Rin Vale"],
+  "description": "A young adult slow burn romance in a space academy.",
+  "canonical_genres": ["science-fiction", "young-adult"],
+  "canonical_plot_tags": ["slow-burn-romance", "competition"],
+  "canonical_character_dynamics": ["rivals"],
+  "genres": ["science-fiction", "young-adult"],
+  "plot_tags": ["slow-burn-romance", "competition"],
+  "character_dynamics": ["rivals"],
+  "age_band": "young-adult",
+  "spice_level": "spice-3-moderate",
+}
+```
+
+# Status Update: Task 334
+
+## Open Library Crawler v1 Taxonomy Config
+
+- Added a new static taxonomy module at `crawler/taxonomy_config.py`.
+- The module defines immutable, in-code v1 taxonomy dimensions for:
+  - genres,
+  - plot tags,
+  - character dynamics,
+  - age bands,
+  - spice levels.
+- Every entry includes a stable `identifier` and human-readable `label`.
+- Spice levels are represented as an ordered canonical scale from 1 to 5
+  via `SpiceLevelEntry.level` and `get_spice_level_by_rank(...)`.
+- Helper metadata is included for downstream normalization where available,
+  including `synonyms` and Open Library subject hints.
+
+### Downstream Usage Guidance
+
+- Normalization logic should import accessors from
+  `crawler.taxonomy_config` rather than reading internal constants.
+- Use:
+  - `get_all_genres()`
+  - `get_all_plot_tags()`
+  - `get_all_character_dynamics()`
+  - `get_age_bands()`
+  - `get_spice_levels()`
+  - `get_taxonomy_version()`
+- Treat returned entries as read-only canonical values for taxonomy v1.
+  The module is pure-Python static configuration and performs no network or
+  database I/O.
+
 # Tester Report: Workflow #29 (End-to-End Testing, Bug Fixes, and QA Stabilization)
 
 Date: 2026-03-10
@@ -1993,3 +2157,80 @@ Workflow goal "End-to-End Testing, Bug Fixes, and QA Stabilization" is met for t
 ## Overall Verdict
 
 PASS
+
+# Tester Report: Workflow #33 (Open Library Crawler Normalization & Taxonomy Mapping)
+
+Date: 2026-03-10
+Branch: `workflow/33/dev`
+Role: TESTER (verification only; no code changes)
+
+## Tests Run and Results
+
+1. `python -m pytest tests/ -q`
+- Initial result: FAIL
+- Output: `/usr/local/bin/python: No module named pytest`
+
+2. `python -m pip install -r requirements.txt`
+- Result: PASS
+- Output summary: Installed Flask + dependencies; PyMySQL already satisfied.
+
+3. `python -m pip install pytest`
+- Result: PASS
+- Output summary: Installed `pytest 9.0.2`.
+
+4. `python -m pytest tests/ -q`
+- Result: PASS
+- Output summary: `80 passed in 8.32s`
+
+5. `python -m compileall crawler`
+- Result: PASS
+- Output summary: `Listing 'crawler'...` with no compile errors.
+
+## Per-Task Acceptance Verdict
+
+### Task #334: Define v1 taxonomy and config structures
+Verdict: PASS
+
+Acceptance criteria verification:
+1. PASS: `crawler/taxonomy_config.py` defines canonical v1 taxonomy sets for genres, plot tags, character dynamics, age bands, and spice levels.
+2. PASS: Each entry has stable `identifier` + `label`; spice is explicitly ordered with levels 1..5 (`SpiceLevelEntry.level`).
+3. PASS: Accessors exist per dimension (`get_all_genres`, `get_all_plot_tags`, `get_all_character_dynamics`, `get_age_bands`, `get_spice_levels`).
+4. PASS: Module is static pure-Python configuration; no network/database I/O.
+5. PASS: Compile/import validation succeeded (`python -m compileall crawler`).
+6. PASS: `STATUS.md` includes Task #334 entry with module path, dimensions, and downstream usage guidance.
+
+### Task #335: Implement Open Library field normalization utilities
+Verdict: PASS
+
+Acceptance criteria verification:
+1. PASS: `crawler/normalization.py` exposes `normalize_openlibrary_book(raw_book: dict[str, Any]) -> NormalizedOpenLibraryBook`.
+2. PASS: Output includes taxonomy fields (`genres`, `plot_tags`, `character_dynamics`, `age_band`, `spice_level`) and canonical fields.
+3. PASS: Normalization uses taxonomy module + standard library only; no network/database I/O.
+4. PASS: Heuristics are table-driven (`GENRE_KEYWORD_MAP`, `PLOT_TAG_KEYWORD_MAP`, `CHARACTER_DYNAMIC_KEYWORD_MAP`, weighted maps), not ad hoc scattered checks.
+5. PASS: `tests/test_normalization.py` includes 3 representative cases: children/low spice, YA/medium spice, adult/higher spice; passing in full suite.
+6. PASS: `STATUS.md` includes Task #335 entry with module path, primary entrypoint, heuristic coverage, and normalized-record example.
+
+### Task #336: Wire normalization into crawler ingestion pipeline
+Verdict: PASS
+
+Acceptance criteria verification:
+1. PASS: Ingestion path imports and invokes normalization (`crawler/goodreads_crawler.py` imports `normalize_openlibrary_book`; called via `build_taxonomy_enrichment` from `fetch_book_record`).
+2. PASS: Resulting persistence payload includes canonical taxonomy fields (`canonical_genres`, `canonical_plot_tags`, `canonical_character_dynamics`, `age_band`, `spice_level`) before DB write.
+3. PASS: Idempotent persistence confirmed in code/tests (`INSERT ... ON DUPLICATE KEY UPDATE`; `tests/test_crawler_mysql_integration.py` verifies rerun updates without duplicates).
+4. PASS: CLI toggle exists and defaults enabled (`--normalize` / `--no-normalize`, default `True`) aligned with v1 behavior.
+5. PASS: Automated test covers normalization invocation and output usage (`tests/test_goodreads_crawler.py::test_fetch_book_record_calls_normalization_before_record_build`).
+6. PASS: `STATUS.md` includes Task #336 run instructions and notes normalization integration + flag behavior.
+
+## Integration Issues / Regression Check
+
+- No integration break detected across tasks #334/#335/#336.
+- Taxonomy config, normalization layer, crawler ingestion wiring, and DB upsert behavior operate coherently in tests.
+- Full suite passed after installing missing test tooling in environment.
+
+## Bugs Filed
+
+- None.
+
+## Overall Verdict
+
+- `CLEAN`

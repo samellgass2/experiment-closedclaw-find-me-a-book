@@ -134,7 +134,7 @@ class CrawlerValidationSmokeTests(unittest.TestCase):
             slug="crawler-validation-smoke",
             title=f"Crawler Validation {prefix} {suffix}",
             description=(
-                "A found family survives academy rivalries and learns to trust."
+                "A young adult found family survives academy rivals."
             ),
             isbn_13=f"97812{suffix}",
             primary_author=f"Primary Author {suffix}",
@@ -179,6 +179,12 @@ class CrawlerValidationSmokeTests(unittest.TestCase):
                   title,
                   description,
                   maturity_rating,
+                  taxonomy_version,
+                  canonical_genres,
+                  canonical_plot_tags,
+                  canonical_character_dynamics,
+                  age_band,
+                  spice_level,
                   source_provider,
                   external_source_id
                 FROM books
@@ -215,7 +221,17 @@ class CrawlerValidationSmokeTests(unittest.TestCase):
         assert isinstance(book_row, dict)
         self.assertEqual(book_row["title"], values.title)
         self.assertIn("found family", str(book_row["description"]).lower())
-        self.assertEqual(book_row["maturity_rating"], "general")
+        self.assertEqual(book_row["maturity_rating"], "teen")
+        self.assertEqual(book_row["taxonomy_version"], "v1")
+        self.assertIn("fantasy", str(book_row["canonical_genres"]).lower())
+        self.assertIn("young-adult", str(book_row["canonical_genres"]).lower())
+        self.assertIn("found-family", str(book_row["canonical_plot_tags"]).lower())
+        self.assertIn(
+            "rivals",
+            str(book_row["canonical_character_dynamics"]).lower(),
+        )
+        self.assertEqual(book_row["age_band"], "young-adult")
+        self.assertEqual(book_row["spice_level"], "spice-3-moderate")
         self.assertEqual(book_row["source_provider"], "goodreads")
         self.assertEqual(book_row["external_source_id"], values.external_id)
         self.assertEqual(
@@ -241,7 +257,7 @@ class CrawlerValidationSmokeTests(unittest.TestCase):
             BookFilterCriteria(
                 query="found family",
                 genre="fantasy",
-                age_rating="general",
+                age_rating="teen",
                 subject_matter=("found family",),
                 limit=5,
             )
@@ -292,11 +308,59 @@ class CrawlerCliMockedTests(unittest.TestCase):
             )
 
         self.assertEqual(exit_code, 0)
-        crawler_cls.assert_called_once()
+        crawler_cls.assert_called_once_with(
+            max_attempts=3,
+            enable_normalization=True,
+        )
         fake_crawler.crawl.assert_called_once_with(query="cli fixture", limit=1)
         repo_connect.assert_called_once()
         fake_repo.upsert_book.assert_called_once_with(fake_record)
         fake_repo.close.assert_called_once()
+
+    def test_run_cli_accepts_no_normalize_flag(self) -> None:
+        fake_record = BookRecord(
+            external_source_id="cli303",
+            title="CLI Crawler Book",
+            description="CLI smoke fixture",
+            authors=["CLI Author"],
+            genres=["Fantasy"],
+        )
+        fake_crawler = Mock()
+        fake_crawler.crawl.return_value = [fake_record]
+        fake_repo = Mock()
+
+        with patch(
+            "crawler.goodreads_crawler.GoodreadsCrawler",
+            return_value=fake_crawler,
+        ) as crawler_cls, patch(
+            "crawler.goodreads_crawler.MySQLBookRepository.connect",
+            return_value=fake_repo,
+        ):
+            exit_code = run_cli(
+                [
+                    "--query",
+                    "cli fixture",
+                    "--limit",
+                    "1",
+                    "--db-host",
+                    "db.example",
+                    "--db-port",
+                    "3306",
+                    "--db-user",
+                    "crawler",
+                    "--db-password",
+                    "secret",
+                    "--db-name",
+                    "books",
+                    "--no-normalize",
+                ]
+            )
+
+        self.assertEqual(exit_code, 0)
+        crawler_cls.assert_called_once_with(
+            max_attempts=3,
+            enable_normalization=False,
+        )
 
 
 if __name__ == "__main__":

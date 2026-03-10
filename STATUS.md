@@ -2234,3 +2234,25 @@ Acceptance criteria verification:
 ## Overall Verdict
 
 - `CLEAN`
+
+## Task 346 - Align Python dependencies and requirements (RUN_ID=627)
+
+Date: 2026-03-10
+
+Summary:
+- Updated top-level `requirements.txt` to capture project dependencies with compatible ranges.
+- Preserved existing core dependencies and added required crawler/testing packages.
+- Organized dependencies by purpose (core app, crawler/parsing, tests).
+
+`requirements.txt` now includes:
+- `flask>=3.0,<4.0`
+- `pymysql>=1.1,<2.0`
+- `requests>=2.32,<3.0`
+- `beautifulsoup4>=4.12,<5.0`
+- `pytest>=8.0,<10.0`
+
+Bootstrap / install command:
+1. `python -m pip install -r requirements.txt`
+
+Documentation updates:
+- `README.md` now references `pip install -r requirements.txt` as the canonical environment bootstrap step.

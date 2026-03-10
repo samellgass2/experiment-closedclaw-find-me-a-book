@@ -2157,3 +2157,80 @@ Workflow goal "End-to-End Testing, Bug Fixes, and QA Stabilization" is met for t
 ## Overall Verdict
 
 PASS
+
+# Tester Report: Workflow #33 (Open Library Crawler Normalization & Taxonomy Mapping)
+
+Date: 2026-03-10
+Branch: `workflow/33/dev`
+Role: TESTER (verification only; no code changes)
+
+## Tests Run and Results
+
+1. `python -m pytest tests/ -q`
+- Initial result: FAIL
+- Output: `/usr/local/bin/python: No module named pytest`
+
+2. `python -m pip install -r requirements.txt`
+- Result: PASS
+- Output summary: Installed Flask + dependencies; PyMySQL already satisfied.
+
+3. `python -m pip install pytest`
+- Result: PASS
+- Output summary: Installed `pytest 9.0.2`.
+
+4. `python -m pytest tests/ -q`
+- Result: PASS
+- Output summary: `80 passed in 8.32s`
+
+5. `python -m compileall crawler`
+- Result: PASS
+- Output summary: `Listing 'crawler'...` with no compile errors.
+
+## Per-Task Acceptance Verdict
+
+### Task #334: Define v1 taxonomy and config structures
+Verdict: PASS
+
+Acceptance criteria verification:
+1. PASS: `crawler/taxonomy_config.py` defines canonical v1 taxonomy sets for genres, plot tags, character dynamics, age bands, and spice levels.
+2. PASS: Each entry has stable `identifier` + `label`; spice is explicitly ordered with levels 1..5 (`SpiceLevelEntry.level`).
+3. PASS: Accessors exist per dimension (`get_all_genres`, `get_all_plot_tags`, `get_all_character_dynamics`, `get_age_bands`, `get_spice_levels`).
+4. PASS: Module is static pure-Python configuration; no network/database I/O.
+5. PASS: Compile/import validation succeeded (`python -m compileall crawler`).
+6. PASS: `STATUS.md` includes Task #334 entry with module path, dimensions, and downstream usage guidance.
+
+### Task #335: Implement Open Library field normalization utilities
+Verdict: PASS
+
+Acceptance criteria verification:
+1. PASS: `crawler/normalization.py` exposes `normalize_openlibrary_book(raw_book: dict[str, Any]) -> NormalizedOpenLibraryBook`.
+2. PASS: Output includes taxonomy fields (`genres`, `plot_tags`, `character_dynamics`, `age_band`, `spice_level`) and canonical fields.
+3. PASS: Normalization uses taxonomy module + standard library only; no network/database I/O.
+4. PASS: Heuristics are table-driven (`GENRE_KEYWORD_MAP`, `PLOT_TAG_KEYWORD_MAP`, `CHARACTER_DYNAMIC_KEYWORD_MAP`, weighted maps), not ad hoc scattered checks.
+5. PASS: `tests/test_normalization.py` includes 3 representative cases: children/low spice, YA/medium spice, adult/higher spice; passing in full suite.
+6. PASS: `STATUS.md` includes Task #335 entry with module path, primary entrypoint, heuristic coverage, and normalized-record example.
+
+### Task #336: Wire normalization into crawler ingestion pipeline
+Verdict: PASS
+
+Acceptance criteria verification:
+1. PASS: Ingestion path imports and invokes normalization (`crawler/goodreads_crawler.py` imports `normalize_openlibrary_book`; called via `build_taxonomy_enrichment` from `fetch_book_record`).
+2. PASS: Resulting persistence payload includes canonical taxonomy fields (`canonical_genres`, `canonical_plot_tags`, `canonical_character_dynamics`, `age_band`, `spice_level`) before DB write.
+3. PASS: Idempotent persistence confirmed in code/tests (`INSERT ... ON DUPLICATE KEY UPDATE`; `tests/test_crawler_mysql_integration.py` verifies rerun updates without duplicates).
+4. PASS: CLI toggle exists and defaults enabled (`--normalize` / `--no-normalize`, default `True`) aligned with v1 behavior.
+5. PASS: Automated test covers normalization invocation and output usage (`tests/test_goodreads_crawler.py::test_fetch_book_record_calls_normalization_before_record_build`).
+6. PASS: `STATUS.md` includes Task #336 run instructions and notes normalization integration + flag behavior.
+
+## Integration Issues / Regression Check
+
+- No integration break detected across tasks #334/#335/#336.
+- Taxonomy config, normalization layer, crawler ingestion wiring, and DB upsert behavior operate coherently in tests.
+- Full suite passed after installing missing test tooling in environment.
+
+## Bugs Filed
+
+- None.
+
+## Overall Verdict
+
+- `CLEAN`

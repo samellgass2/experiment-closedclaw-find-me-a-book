@@ -2446,3 +2446,85 @@ PASS: Workflow #35 goals are met. The branch now provides:
 ### Overall Verdict
 
 `PASS`
+
+## QA Certification Report - Workflow #35 (Environment, Configuration, and Dependency Setup)
+
+Date: 2026-03-10
+Branch: `workflow/35/dev`
+Role: QA validation agent (certification only)
+
+### Commits Reviewed (`main..HEAD`)
+
+- `885b9ab` bugfix: no interactive frontend available at localhost:8000 for QA browser workflow
+- `f357acb` task/348: standardize canonical pytest command
+- `d0739f4` task/360: supervisor safety-commit (Codex omitted git commit)
+- `6be46c2` bugfix: no interactive frontend at localhost:8000
+- `5a57fc0` task/354: supervisor safety-commit (Codex omitted git commit)
+- `51c61df` task/347: centralize runtime configuration in root config module
+- `37ac4a3` task/346: add task report for dependency alignment
+- `f6b176a` task/346: align python dependencies and install docs
+
+### Commands Run and Results
+
+1. `python --version`
+- Result: PASS
+- Output: `Python 3.12.13`
+
+2. `ls venv/ .venv/ 2>/dev/null`
+- Result: PASS
+- Output: none (no existing local venv directories)
+
+3. `python -m venv /tmp/find-me-a-book-w35-qa-venv && /tmp/find-me-a-book-w35-qa-venv/bin/python -m pip install --upgrade pip && /tmp/find-me-a-book-w35-qa-venv/bin/python -m pip install -r requirements.txt`
+- Result: PASS
+- Output summary: dependency resolution/install succeeded with no errors; installed `flask`, `pymysql`, `requests`, `beautifulsoup4`, `pytest`.
+
+4. `/tmp/find-me-a-book-w35-qa-venv/bin/python -m pytest tests/ -q`
+- Result: PASS
+- Output: `87 passed in 6.15s`
+
+5. `/tmp/find-me-a-book-w35-qa-venv/bin/pytest tests/ -q`
+- Result: FAIL (non-canonical runner path)
+- Output summary: collection failed with `ModuleNotFoundError` for top-level modules (`backend`, `crawler`, `db`).
+
+6. `/tmp/find-me-a-book-w35-qa-venv/bin/python -m unittest discover`
+- Result: SKIPPED/INFO
+- Output: `Ran 0 tests in 0.000s` / `NO TESTS RAN`
+
+7. `/tmp/find-me-a-book-w35-qa-venv/bin/python -m unittest discover -s tests -p 'test*.py'`
+- Result: PASS
+- Output: `Ran 86 tests in 5.290s` / `OK`
+
+8. `/tmp/find-me-a-book-w35-qa-venv/bin/python -m pytest`
+- Result: PASS
+- Output: `87 passed in 6.62s`
+
+### Acceptance Verdicts
+
+Task: Align Python dependencies and requirements
+1. PASS: Top-level `requirements.txt` exists and includes `flask`, `pymysql`, `requests`, `beautifulsoup4`, and `pytest`.
+2. PASS: Importable third-party modules used in repository runtime/test code are present in `requirements.txt`.
+3. PASS: Clean-environment install succeeded (`pip install -r requirements.txt` completed successfully).
+4. PASS: Docs reference `pip install -r requirements.txt` as the primary install step (`README.md`).
+5. PASS: `STATUS.md` contains entries documenting requirements setup and install guidance.
+
+Task: Introduce centralized configuration module
+1. PASS: Root `config.py` exists and is importable.
+2. PASS: `config.py` defines `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `BOOK_SOURCE_BASE_URL`, `BOOK_SOURCE_API_KEY`, and `CRAWLER_RATE_LIMIT_PER_MIN` with env-driven defaults.
+3. PASS: No production credentials/API keys/production-only hostnames found hard-coded in runtime modules.
+4. PASS: Runtime code uses centralized configuration imports (`backend/config.py`, `crawler/goodreads_crawler.py`, `db/setup_database.py`, `scripts/benchmark_search_performance.py`).
+5. PASS: `STATUS.md` documents configuration module, supported env vars/defaults, and dev-mysql/book source guidance.
+
+Task: Establish canonical pytest test command
+1. PASS: Test modules exist under top-level `tests/` including `tests/test_smoke_env.py`.
+2. PASS: From repo root in clean env, canonical command `python -m pytest` executes successfully without import errors.
+3. PASS: Smoke test verifies core module imports (`config`, `backend.app`, `backend.repositories.books`, `db.setup_database`, `crawler.goodreads_crawler`).
+4. PASS: No conflicting alternative test runner documented as primary; docs designate `python -m pytest` as canonical.
+5. PASS: `STATUS.md` and `README.md` mention `python -m pytest` as canonical command for developers/CI.
+
+### Workflow Goal Verification
+
+PASS: Workflow #35 goals are met. The branch provides reproducible dependency bootstrap, centralized configuration, and a validated canonical pytest command for consistent local and CI execution.
+
+### Overall Verdict
+
+`PASS`

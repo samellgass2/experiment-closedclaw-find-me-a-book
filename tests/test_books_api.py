@@ -21,7 +21,7 @@ REQUIRED_ENV_VARS = (
     "DEV_MYSQL_USER",
     "DEV_MYSQL_PASSWORD",
 )
-MIGRATION_PATH = Path(__file__).resolve().parents[1] / "db" / "migrations" / "001_init.sql"
+MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "db" / "migrations"
 
 
 @unittest.skipUnless(
@@ -41,8 +41,9 @@ class BooksApiIntegrationTests(unittest.TestCase):
             raise unittest.SkipTest(
                 "Missing required MySQL environment variables: " + ", ".join(missing)
             )
-        if not MIGRATION_PATH.exists():
-            raise unittest.SkipTest(f"Migration file not found: {MIGRATION_PATH}")
+        migration_files = sorted(MIGRATIONS_DIR.glob("*.sql"))
+        if not migration_files:
+            raise unittest.SkipTest(f"No migration files found: {MIGRATIONS_DIR}")
 
         suffix = f"task244_{int(time.time() * 1000)}"
         cls.schema_name = f"dev_find_me_a_book_{suffix}"[:64]
@@ -84,7 +85,7 @@ class BooksApiIntegrationTests(unittest.TestCase):
 
         setup_connection = cls._open_connection()
         try:
-            cls._apply_migration_script(setup_connection)
+            cls._apply_migration_scripts(setup_connection)
             cls.seeded_titles = cls._seed_fixture_data(setup_connection)
         finally:
             setup_connection.close()
@@ -134,22 +135,24 @@ class BooksApiIntegrationTests(unittest.TestCase):
         )
 
     @classmethod
-    def _apply_migration_script(cls, connection: Any) -> None:
-        raw_sql = MIGRATION_PATH.read_text(encoding="utf-8")
-        lines = [
-            line
-            for line in raw_sql.splitlines()
-            if not line.strip().startswith("--")
-        ]
-        script_without_comments = "\n".join(lines)
-        statements = [
-            statement.strip()
-            for statement in script_without_comments.split(";")
-            if statement.strip()
-        ]
+    def _apply_migration_scripts(cls, connection: Any) -> None:
+        migration_files = sorted(MIGRATIONS_DIR.glob("*.sql"))
         with connection.cursor() as cursor:
-            for statement in statements:
-                cursor.execute(statement)
+            for migration_path in migration_files:
+                raw_sql = migration_path.read_text(encoding="utf-8")
+                lines = [
+                    line
+                    for line in raw_sql.splitlines()
+                    if not line.strip().startswith("--")
+                ]
+                script_without_comments = "\n".join(lines)
+                statements = [
+                    statement.strip()
+                    for statement in script_without_comments.split(";")
+                    if statement.strip()
+                ]
+                for statement in statements:
+                    cursor.execute(statement)
 
     @classmethod
     def _seed_fixture_data(cls, connection: Any) -> dict[str, str]:

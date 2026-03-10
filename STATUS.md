@@ -1394,3 +1394,97 @@ Result:
 ## Overall Verdict
 
 `CLEAN`
+
+# Status Update: Task 273
+
+## Advanced Book Filtering: Performance and Relevance
+
+### What Changed
+
+- Refactored `backend/repositories/books.py` search SQL to use a
+  `candidate_books` CTE that applies filtering, relevance ordering, and `LIMIT`
+  before building author/genre display aggregates.
+- Added weighted relevance signals across all advanced criteria dimensions:
+  - query/title/author/fulltext text match
+  - genre match
+  - age rating match
+  - spice-level (maturity) match
+  - subject matter token frequency in description
+  - plot-point token frequency in description
+  - character-dynamics token frequency in description
+- Added inline query-builder documentation in `BookRepository._build_books_query`
+  describing why the CTE structure is used (based on EXPLAIN behavior).
+
+### Indexing and Query-Tuning
+
+- Added migration: `db/migrations/002_search_indexes.sql`
+- Added/ensured the following indexes for hot search paths:
+  - `books`: `ix_books_maturity_updated_id`, `ix_books_updated_id`
+  - `books`: `ftx_books_title_description` FULLTEXT on `(title, description)`
+    for ranked text search and subject-matter-oriented matching
+  - `authors`: `ix_authors_full_name_prefix`
+  - `genres`: `ix_genres_lookup`
+  - `book_genres`: `ix_book_genres_book_id`
+- Mirrored these index definitions in `db/schema.sql` for full schema snapshots.
+
+### Relevance Strategy (Current Weights)
+
+- Exact title match: `160`
+- Title prefix match: `100`
+- Title contains match: `55`
+- Author contains match: `45`
+- FULLTEXT query match (`title`,`description`): `80`
+- Genre match: `30`
+- Age rating match: `22`
+- Spice-level match: `18`
+- Subject-matter occurrence multiplier: up to `3 * 10`
+- Plot-point occurrence multiplier: up to `3 * 8`
+- Character-dynamics occurrence multiplier: up to `3 * 7`
+
+Notes:
+- Scalar filters remain hard constraints (conjunctive filtering behavior is
+  preserved).
+- Token-frequency boosts differentiate stronger matches among already valid rows.
+
+### Performance Checks (Reproducible)
+
+Run:
+
+```bash
+DEV_MYSQL_HOST=dev-mysql \
+DEV_MYSQL_PORT=3306 \
+DEV_MYSQL_USER=devagent \
+DEV_MYSQL_PASSWORD=<password> \
+python scripts/benchmark_search_performance.py --seed-size 1200 --iterations 8 --warmup 2 --budget-ms 400
+```
+
+Measured on 2026-03-10 (UTC) with seeded dataset size `1200`:
+
+- `fantasy-low-spice`: mean `68.32ms`, p95 `71.77ms`
+- `scifi-teen`: mean `71.52ms`, p95 `74.56ms`
+- `romance-high`: mean `70.45ms`, p95 `75.02ms`
+- `browse-mystery`: mean `11.72ms`, p95 `13.32ms`
+
+All benchmark scenarios passed the configured p95 budget (`<= 400ms`).
+EXPLAIN output showed index usage including:
+`ix_books_maturity_updated_id`, `ix_books_updated_id`,
+`ix_book_genres_book_id`, and `ix_genres_lookup`.
+
+### New/Updated Test Coverage
+
+- Added integration relevance tests in `tests/test_relevance_ranking.py`:
+  - stronger multi-criteria matches rank above weaker matches
+  - changing `spice_level` changes the top result as expected
+- Updated existing query-shape tests in
+  `tests/test_books_repository_filters.py` for the CTE-based SQL builder.
+- Updated migration application in `tests/test_books_api.py` to apply all
+  migration files (not just `001_init.sql`) so search/index behavior remains
+  representative.
+
+### Verification Commands
+
+- `python -m unittest discover tests -q`
+- `DEV_MYSQL_HOST=dev-mysql DEV_MYSQL_PORT=3306 DEV_MYSQL_USER=devagent DEV_MYSQL_PASSWORD=<password> DEV_MYSQL_DATABASE=dev_find_me_a_book python -m unittest tests.test_relevance_ranking -q`
+- `DEV_MYSQL_HOST=dev-mysql DEV_MYSQL_PORT=3306 DEV_MYSQL_USER=devagent DEV_MYSQL_PASSWORD=<password> python scripts/benchmark_search_performance.py --seed-size 1200 --iterations 8 --warmup 2 --budget-ms 400`
+
+Result: `PASS`

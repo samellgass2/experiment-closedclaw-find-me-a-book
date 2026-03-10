@@ -146,6 +146,11 @@ def create_app(config: AppConfig | None = None) -> Flask:
             abort(404)
         return send_from_directory(frontend_dir, asset_path)
 
+    @app.get("/frontend/<path:asset_path>")
+    def frontend_compat_asset(asset_path: str) -> Any:
+        """Serve frontend assets for legacy /frontend/* URLs."""
+        return send_from_directory(frontend_dir, asset_path)
+
     @app.get("/api/books")
     @app.get("/api/books/search")
     @app.get("/search")

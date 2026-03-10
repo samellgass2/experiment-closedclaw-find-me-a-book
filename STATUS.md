@@ -2234,3 +2234,185 @@ Acceptance criteria verification:
 ## Overall Verdict
 
 - `CLEAN`
+
+## Task 346 - Align Python dependencies and requirements (RUN_ID=627)
+
+Date: 2026-03-10
+
+Summary:
+- Updated top-level `requirements.txt` to capture project dependencies with compatible ranges.
+- Preserved existing core dependencies and added required crawler/testing packages.
+- Organized dependencies by purpose (core app, crawler/parsing, tests).
+
+`requirements.txt` now includes:
+- `flask>=3.0,<4.0`
+- `pymysql>=1.1,<2.0`
+- `requests>=2.32,<3.0`
+- `beautifulsoup4>=4.12,<5.0`
+- `pytest>=8.0,<10.0`
+
+Bootstrap / install command:
+1. `python -m pip install -r requirements.txt`
+
+Documentation updates:
+- `README.md` now references `pip install -r requirements.txt` as the canonical environment bootstrap step.
+
+## Task 347 - Introduce centralized configuration module (RUN_ID=630)
+
+Date: 2026-03-10
+
+Summary:
+- Added a new root-level configuration module at `config.py` that centralizes
+  runtime settings for app, database, and crawler concerns.
+- `config.py` now exposes typed settings loaders and module-level attributes
+  for:
+  - `DB_HOST` (default: `dev-mysql`)
+  - `DB_PORT` (default: `3306`)
+  - `DB_NAME` (default: `dev_find_me_a_book`)
+  - `DB_USER` (default: `devagent`)
+  - `DB_PASSWORD` (default: empty string)
+  - `BOOK_SOURCE_BASE_URL` (default: `https://www.goodreads.com`)
+  - `BOOK_SOURCE_API_KEY` (default: `None`)
+  - `CRAWLER_RATE_LIMIT_PER_MIN` (default: `60`)
+- Database settings read `DB_*` first and fall back to `DEV_MYSQL_*` to keep
+  compatibility with existing local tooling.
+
+Refactors completed:
+- `backend/config.py` now delegates environment resolution to root `config.py`.
+- `crawler/goodreads_crawler.py` now imports centralized book source + crawler
+  settings and DB settings instead of reading env vars directly.
+- `db/setup_database.py` now resolves DB connection defaults via root config.
+- `scripts/benchmark_search_performance.py` now reads DB config via root
+  config instead of direct `os.environ` access.
+
+Dev MySQL relationship:
+- Local defaults in `config.py` are aligned with this dev-runner environment:
+  host `dev-mysql`, port `3306`, and database `dev_find_me_a_book`.
+- To override locally or in CI, set `DB_*` variables. Existing
+  `DEV_MYSQL_*` variables continue to work as fallback inputs.
+
+Book source API configuration:
+- `BOOK_SOURCE_BASE_URL` selects the crawler source endpoint.
+- `BOOK_SOURCE_API_KEY` is optional and defaults to `None` (not required for
+  the current Goodreads crawl path, but supported for providers that need a key).
+- `CRAWLER_RATE_LIMIT_PER_MIN` controls crawler request throttling.
+
+## Tester Report - Workflow #35 (Environment, Configuration, and Dependency Setup)
+
+Date: 2026-03-10
+Branch: `workflow/35/dev`
+Role: TESTER
+
+### Tests Run
+
+1. `python -m pytest tests/ -q` (before env bootstrap)
+- Result: FAIL
+- Output: `/usr/local/bin/python: No module named pytest`
+
+2. `python -m venv .venv && source .venv/bin/activate && python -m pip install --upgrade pip && python -m pip install -r requirements.txt`
+- Result: PASS
+- Output summary: dependency resolution/install succeeded with no errors.
+
+3. `source .venv/bin/activate && python -m pytest tests/ -q`
+- Result: PASS
+- Output summary: `84 passed in 8.61s`
+
+4. `cd frontend && npm test`
+- Result: PASS
+- Output summary: Node test suite passed (`3 passed, 0 failed`).
+
+5. `source .venv/bin/activate && python -m unittest discover`
+- Result: INFO
+- Output summary: `Ran 0 tests` (default discovery from repo root found none).
+
+6. `source .venv/bin/activate && python -m unittest discover tests`
+- Result: PASS
+- Output summary: `Ran 84 tests in 4.923s` / `OK`
+
+### Acceptance Verification
+
+Task #346: Align Python dependencies and requirements
+1. PASS: Top-level `requirements.txt` exists and includes `flask`, `pymysql`, `requests`, `beautifulsoup4`, and `pytest`.
+2. PASS: Third-party imports used in repository code are covered by `requirements.txt` (notably `flask` and `pymysql`; required crawler/test packages also present).
+3. PASS: In a clean virtual environment, `pip install -r requirements.txt` succeeds without dependency resolution errors.
+4. PASS: Setup documentation references `pip install -r requirements.txt` as primary bootstrap (`README.md`).
+5. PASS: `STATUS.md` contains Task #346 entry describing dependency updates and install command.
+
+Task #347: Introduce centralized configuration module
+1. PASS: Root `config.py` exists and is importable.
+2. PASS: `config.py` defines `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `BOOK_SOURCE_BASE_URL`, `BOOK_SOURCE_API_KEY`, and `CRAWLER_RATE_LIMIT_PER_MIN` via env-driven loading with defaults.
+3. PASS: No production credentials/API keys/production-only hostnames found hard-coded in runtime code.
+4. PASS: Runtime modules use centralized config (`backend/config.py`, `crawler/goodreads_crawler.py`, `db/setup_database.py`, `scripts/benchmark_search_performance.py`).
+5. PASS: `STATUS.md` Task #347 entry documents env vars/defaults and mapping to `dev-mysql` / `dev_find_me_a_book`.
+
+### Integration / Regression Check
+
+- PASS: Tasks #346 and #347 operate cohesively: environment bootstrap installs deps, config loads correctly, and full Python + frontend test suites pass.
+- PASS: No obvious regressions detected from these changes.
+
+### Bugs Filed
+
+- None.
+
+### Overall Verdict
+
+`CLEAN`
+
+## QA Validation Report - Workflow #35 (Environment, Configuration, and Dependency Setup)
+
+Date: 2026-03-10
+Branch: `workflow/35/dev`
+Role: QA validation agent (certification only, no code changes)
+
+### Commits Reviewed (`main..HEAD`)
+
+- `6be46c2` bugfix: no interactive frontend at localhost:8000
+- `5a57fc0` task/354: supervisor safety-commit (Codex omitted git commit)
+- `51c61df` task/347: centralize runtime configuration in root config module
+- `37ac4a3` task/346: add task report for dependency alignment
+- `f6b176a` task/346: align python dependencies and install docs
+
+### Commands Run and Results
+
+1. `python --version || python3 --version`
+- Result: PASS
+- Output: `Python 3.12.13`
+
+2. `ls -d venv/ .venv/ 2>/dev/null || true`
+- Result: PASS
+- Output: no existing `venv/` or `.venv/` found
+
+3. `python -m venv .qa-venv && . .qa-venv/bin/activate && python -m pip install --upgrade pip && python -m pip install -r requirements.txt`
+- Result: PASS
+- Output summary: pip upgraded to `26.0.1`; requirements install succeeded with no resolver errors. Installed packages include `flask-3.1.3`, `pymysql-1.1.2`, `requests-2.32.5`, `beautifulsoup4-4.14.3`, `pytest-9.0.2`.
+
+4. `. .qa-venv/bin/activate && python -m pytest tests/ -q`
+- Result: PASS
+- Output: `86 passed in 15.17s`
+
+### Acceptance Verdicts
+
+Task: Align Python dependencies and requirements
+1. PASS: Top-level `requirements.txt` exists and includes `flask`, `pymysql`, `requests`, `beautifulsoup4`, and `pytest`.
+2. PASS: Third-party modules imported in repo Python code are covered (`flask`, `pymysql`), and required crawler/test packages are present as specified.
+3. PASS: Clean-environment install succeeded (`pip install -r requirements.txt` in fresh `.qa-venv`).
+4. PASS: Setup docs reference `pip install -r requirements.txt` as primary install step (`README.md`).
+5. PASS: `STATUS.md` includes Task #346 entry documenting `requirements.txt` and install instructions.
+
+Task: Introduce centralized configuration module
+1. PASS: Root `config.py` exists and is importable (`import config` path from repo root).
+2. PASS: `config.py` defines `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `BOOK_SOURCE_BASE_URL`, `BOOK_SOURCE_API_KEY`, `CRAWLER_RATE_LIMIT_PER_MIN`, sourced from env vars with defaults.
+3. PASS: No production credentials, API keys, or production-only DB hostnames hard-coded in runtime code; defaults are local/dev-safe.
+4. PASS: Prior hard-coded runtime config usage was centralized to root config in `backend/config.py`, `crawler/goodreads_crawler.py`, `db/setup_database.py`, and `scripts/benchmark_search_performance.py`.
+5. PASS: `STATUS.md` Task #347 entry documents the config module, supported env vars/defaults, and dev-mysql/book-source configuration guidance.
+
+### Workflow Goal Verification
+
+PASS: Workflow #35 goals are met. The branch now provides:
+- reproducible Python environment bootstrap via `requirements.txt`,
+- centralized runtime configuration via root `config.py`,
+- canonical Python test command documented in `TESTING_STRATEGY.md` (`python -m pytest tests/ -q`) and validated by execution.
+
+### Overall Verdict
+
+`PASS`

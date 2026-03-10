@@ -1,5 +1,4 @@
 import argparse
-import os
 import subprocess
 import tempfile
 import unittest
@@ -31,15 +30,15 @@ class ConnectionParamResolutionTests(unittest.TestCase):
             port=None,
         )
         with patch.dict(
-            os.environ,
+            "os.environ",
             {
-                "DEV_MYSQL_DATABASE": "find_me_a_book",
-                "DEV_MYSQL_HOST": "db.example",
-                "DEV_MYSQL_USER": "book_user",
-                "DEV_MYSQL_PASSWORD": "topsecret",
-                "DEV_MYSQL_PORT": "3306",
+                "DB_NAME": "find_me_a_book",
+                "DB_HOST": "db.example",
+                "DB_USER": "book_user",
+                "DB_PASSWORD": "topsecret",
+                "DB_PORT": "3306",
             },
-            clear=False,
+            clear=True,
         ):
             params = resolve_connection_params(args)
 
@@ -63,15 +62,15 @@ class ConnectionParamResolutionTests(unittest.TestCase):
             port="3307",
         )
         with patch.dict(
-            os.environ,
+            "os.environ",
             {
-                "DEV_MYSQL_DATABASE": "env_db",
-                "DEV_MYSQL_HOST": "env_host",
-                "DEV_MYSQL_USER": "env_user",
-                "DEV_MYSQL_PASSWORD": "env_pass",
-                "DEV_MYSQL_PORT": "3306",
+                "DB_NAME": "env_db",
+                "DB_HOST": "env_host",
+                "DB_USER": "env_user",
+                "DB_PASSWORD": "env_pass",
+                "DB_PORT": "3306",
             },
-            clear=False,
+            clear=True,
         ):
             params = resolve_connection_params(args)
 
@@ -86,7 +85,7 @@ class ConnectionParamResolutionTests(unittest.TestCase):
             ),
         )
 
-    def test_resolve_params_requires_values(self):
+    def test_resolve_params_uses_defaults_when_env_missing(self):
         args = argparse.Namespace(
             database_name=None,
             host=None,
@@ -94,9 +93,19 @@ class ConnectionParamResolutionTests(unittest.TestCase):
             password=None,
             port=None,
         )
-        with patch.dict(os.environ, {}, clear=True):
-            with self.assertRaises(ValueError):
-                resolve_connection_params(args)
+        with patch.dict("os.environ", {}, clear=True):
+            params = resolve_connection_params(args)
+
+        self.assertEqual(
+            params,
+            DbConnectionParams(
+                database="dev_find_me_a_book",
+                host="dev-mysql",
+                user="devagent",
+                password="",
+                port=3306,
+            ),
+        )
 
 
 class CommandConstructionTests(unittest.TestCase):

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
 import sys
 import time
@@ -17,10 +16,11 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import quote_plus, urljoin, urlparse
 from urllib.request import Request, urlopen
 
+import config as runtime_config
 from crawler.normalization import normalize_openlibrary_book
 from crawler.taxonomy_config import get_age_band, get_spice_level, get_taxonomy_version
 
-GOODREADS_BASE_URL = "https://www.goodreads.com"
+GOODREADS_BASE_URL = runtime_config.BOOK_SOURCE_BASE_URL
 BOOK_PATH_PATTERN = re.compile(r"^/book/show/(\d+)")
 YEAR_PATTERN = re.compile(r"\b(1[4-9]\d{2}|20\d{2}|2100)\b")
 NON_ALNUM_PATTERN = re.compile(r"[^a-z0-9]+")
@@ -180,6 +180,8 @@ class GoodreadsCrawler:
     def __init__(
         self,
         base_url: str = GOODREADS_BASE_URL,
+        api_key: str | None = None,
+        rate_limit_per_min: int = runtime_config.CRAWLER_RATE_LIMIT_PER_MIN,
         timeout_seconds: int = 20,
         user_agent: str = "find-me-a-book-bot/1.0 (+https://example.local)",
         max_attempts: int = 3,
@@ -187,6 +189,12 @@ class GoodreadsCrawler:
         enable_normalization: bool = True,
     ) -> None:
         self.base_url = base_url.rstrip("/")
+        self.api_key = api_key if api_key is not None else runtime_config.BOOK_SOURCE_API_KEY
+        if rate_limit_per_min <= 0:
+            raise ValueError("rate_limit_per_min must be greater than zero.")
+        self.rate_limit_per_min = rate_limit_per_min
+        self._min_request_interval = 60.0 / float(rate_limit_per_min)
+        self._last_request_monotonic: float | None = None
         self.timeout_seconds = timeout_seconds
         self.user_agent = user_agent
         self.max_attempts = max(1, max_attempts)
@@ -316,7 +324,11 @@ class GoodreadsCrawler:
         last_error: Exception | None = None
 
         for attempt in range(1, self.max_attempts + 1):
-            request = Request(url=url, headers={"User-Agent": self.user_agent})
+            self._respect_rate_limit()
+            headers = {"User-Agent": self.user_agent}
+            if self.api_key:
+                headers["X-API-Key"] = self.api_key
+            request = Request(url=url, headers=headers)
             try:
                 with urlopen(request, timeout=self.timeout_seconds) as response:
                     status = getattr(response, "status", 200)
@@ -372,6 +384,19 @@ class GoodreadsCrawler:
             raise last_error
 
         raise GoodreadsCrawlError(f"Failed to fetch {url}: unknown error")
+
+    def _respect_rate_limit(self) -> None:
+        """Throttle HTTP requests according to configured per-minute rate."""
+        now = time.monotonic()
+        if self._last_request_monotonic is None:
+            self._last_request_monotonic = now
+            return
+
+        elapsed = now - self._last_request_monotonic
+        sleep_for = self._min_request_interval - elapsed
+        if sleep_for > 0:
+            time.sleep(sleep_for)
+        self._last_request_monotonic = time.monotonic()
 
     def _should_retry(self, http_code: int, attempt: int) -> bool:
         """Retry transient HTTP failures while respecting max attempts."""
@@ -564,35 +589,17 @@ PostgresBookRepository = MySQLBookRepository
 
 def resolve_mysql_config(args: argparse.Namespace) -> MySQLConnectionConfig:
     """Resolve MySQL connection configuration from args and env vars."""
-    host = args.db_host or os.environ.get("DEV_MYSQL_HOST")
-    user = args.db_user or os.environ.get("DEV_MYSQL_USER")
-    password = args.db_password or os.environ.get("DEV_MYSQL_PASSWORD")
-    database = args.db_name or os.environ.get("DEV_MYSQL_DATABASE")
-    port_raw = args.db_port or os.environ.get("DEV_MYSQL_PORT")
-
-    missing: list[str] = []
-    if not host:
-        missing.append("DEV_MYSQL_HOST")
-    if not user:
-        missing.append("DEV_MYSQL_USER")
-    if not password:
-        missing.append("DEV_MYSQL_PASSWORD")
-    if not database:
-        missing.append("DEV_MYSQL_DATABASE")
-    if not port_raw:
-        missing.append("DEV_MYSQL_PORT")
-
-    if missing:
-        joined = ", ".join(missing)
-        raise ValueError(
-            "Missing MySQL connection values. Provide CLI flags or set: "
-            f"{joined}"
-        )
+    db_settings = runtime_config.load_database_settings()
+    host = args.db_host or db_settings.host
+    user = args.db_user or db_settings.user
+    password = args.db_password if args.db_password is not None else db_settings.password
+    database = args.db_name or db_settings.name
+    port_raw = args.db_port if args.db_port is not None else str(db_settings.port)
 
     try:
         port = int(port_raw)
     except (TypeError, ValueError) as exc:
-        raise ValueError("DEV_MYSQL_PORT/--db-port must be an integer.") from exc
+        raise ValueError("DB_PORT/--db-port must be an integer.") from exc
 
     return MySQLConnectionConfig(
         host=host,
@@ -735,27 +742,27 @@ def run_cli(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--db-host",
         default=None,
-        help="MySQL host. Defaults to DEV_MYSQL_HOST.",
+        help="MySQL host. Defaults to DB_HOST (or DEV_MYSQL_HOST fallback).",
     )
     parser.add_argument(
         "--db-port",
         default=None,
-        help="MySQL port. Defaults to DEV_MYSQL_PORT.",
+        help="MySQL port. Defaults to DB_PORT (or DEV_MYSQL_PORT fallback).",
     )
     parser.add_argument(
         "--db-user",
         default=None,
-        help="MySQL user. Defaults to DEV_MYSQL_USER.",
+        help="MySQL user. Defaults to DB_USER (or DEV_MYSQL_USER fallback).",
     )
     parser.add_argument(
         "--db-password",
         default=None,
-        help="MySQL password. Defaults to DEV_MYSQL_PASSWORD.",
+        help="MySQL password. Defaults to DB_PASSWORD (or DEV_MYSQL_PASSWORD fallback).",
     )
     parser.add_argument(
         "--db-name",
         default=None,
-        help="MySQL database name. Defaults to DEV_MYSQL_DATABASE.",
+        help="MySQL database name. Defaults to DB_NAME (or DEV_MYSQL_DATABASE fallback).",
     )
     parser.add_argument(
         "--normalize",

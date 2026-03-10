@@ -6,7 +6,7 @@ FLASK_AVAILABLE = find_spec("flask") is not None
 
 if FLASK_AVAILABLE:
     from backend.app import create_app
-    from backend.config import AppConfig, DatabaseConfig
+    from backend.config import AppConfig, DatabaseConfig, ExternalServiceConfig
     from backend.repositories.books import (
         BookFilterCriteria,
         BookQueryTimeoutError,
@@ -18,6 +18,7 @@ if FLASK_AVAILABLE:
 class BooksApiRouteTests(unittest.TestCase):
     def setUp(self) -> None:
         config = AppConfig(
+            environment="test",
             debug=False,
             log_level="INFO",
             database=DatabaseConfig(
@@ -26,6 +27,10 @@ class BooksApiRouteTests(unittest.TestCase):
                 user="dev",
                 password="dev",
                 database="dev_find_me_a_book",
+            ),
+            external_services=ExternalServiceConfig(
+                book_source_base_url="https://www.goodreads.com",
+                book_source_api_key=None,
             ),
         )
         self.app = create_app(config)

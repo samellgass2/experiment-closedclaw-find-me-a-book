@@ -13,7 +13,7 @@ if FLASK_AVAILABLE and PYMYSQL_AVAILABLE:
     import pymysql
 
     from backend.app import create_app
-    from backend.config import AppConfig, DatabaseConfig
+    from backend.config import AppConfig, DatabaseConfig, ExternalServiceConfig
 
 REQUIRED_ENV_VARS = (
     "DEV_MYSQL_HOST",
@@ -90,7 +90,16 @@ class BooksApiIntegrationTests(unittest.TestCase):
         finally:
             setup_connection.close()
 
-        cls.app_config = AppConfig(debug=False, log_level="INFO", database=cls.db_config)
+        cls.app_config = AppConfig(
+            environment="test",
+            debug=False,
+            log_level="INFO",
+            database=cls.db_config,
+            external_services=ExternalServiceConfig(
+                book_source_base_url="https://www.goodreads.com",
+                book_source_api_key=None,
+            ),
+        )
         cls.app = create_app(config=cls.app_config)
         cls.client = cls.app.test_client()
 

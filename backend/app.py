@@ -123,7 +123,15 @@ def create_app(config: AppConfig | None = None) -> Flask:
 
     app = Flask(__name__)
     app.config["DEBUG"] = runtime_config.debug
+    app.config["ENV"] = runtime_config.environment
+    app.config["LOG_LEVEL"] = runtime_config.log_level
     app.config["DATABASE_CONFIG"] = runtime_config.database.as_dict
+    app.config["BOOK_SOURCE_BASE_URL"] = (
+        runtime_config.external_services.book_source_base_url
+    )
+    app.config["BOOK_SOURCE_API_KEY"] = (
+        runtime_config.external_services.book_source_api_key
+    )
 
     logger = logging.getLogger("backend.app")
     logger.info("Initialized backend app with MySQL host %s", runtime_config.database.host)

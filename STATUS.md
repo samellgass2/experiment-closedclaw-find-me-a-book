@@ -2481,3 +2481,16 @@ docker compose -f docker-compose.example.yml up --build
 
 Adjust runtime values by editing environment variables in
 `docker-compose.example.yml` or passing `-e` vars to `docker run`.
+
+## Task 367 - Environment-specific backend configuration loading
+
+- Added profile-aware backend configuration module in `backend/config.py`.
+- `FLASK_ENV` now selects `development`, `test`, or `production` behavior.
+- Backend app factory (`backend/app.py`) now reads runtime settings from this
+  config layer (database settings, debug/logging, external service keys).
+- Default development behavior remains aligned with existing values
+  (`dev-mysql:3306`, `dev_find_me_a_book`, `devagent`).
+- Added root documentation: `CONFIGURATION.md`.
+
+See [CONFIGURATION.md](CONFIGURATION.md) for supported environment variables,
+default values, and environment-specific examples.

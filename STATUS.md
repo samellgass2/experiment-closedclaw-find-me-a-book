@@ -1488,3 +1488,78 @@ EXPLAIN output showed index usage including:
 - `DEV_MYSQL_HOST=dev-mysql DEV_MYSQL_PORT=3306 DEV_MYSQL_USER=devagent DEV_MYSQL_PASSWORD=<password> python scripts/benchmark_search_performance.py --seed-size 1200 --iterations 8 --warmup 2 --budget-ms 400`
 
 Result: `PASS`
+
+# Tester Report: Workflow #25 (2026-03-10)
+
+## Scope
+- Project: `find-me-a-book`
+- Branch: `workflow/25/dev`
+- Verified tasks: #271, #272, #273
+
+## Tests Run and Results
+
+1. Command: `python -m pytest tests/ -q`
+- Result: FAIL
+- Output: `/usr/local/bin/python: No module named pytest`
+
+2. Command: `pytest tests/ -q`
+- Result: FAIL
+- Output: `/bin/bash: line 1: pytest: command not found`
+
+3. Command: `python -m unittest discover`
+- Result: FAIL (runner executed but discovered no tests)
+- Output: `Ran 0 tests ... NO TESTS RAN`
+
+4. Command: `python -m unittest discover -s tests -v` (before installing Flask)
+- Result: PASS with skips
+- Output summary: `Ran 53 tests in 0.585s`, `OK (skipped=23)`
+
+5. Command: `python -m pip install -r requirements.txt`
+- Result: PASS
+- Notes: Installed Flask and dependencies; PyMySQL already present.
+
+6. Command: `python -m unittest discover -s tests -v` (after installing Flask)
+- Result: FAIL
+- Output summary: `Ran 53 tests in 0.776s`, `FAILED (failures=2)`
+- Failing tests:
+  - `tests/test_books_api.py::BooksApiIntegrationTests::test_filter_by_genre`
+  - `tests/test_books_api.py::BooksApiIntegrationTests::test_combined_filters_return_intersection`
+- Failure detail (both): response includes extra title `Moonlit Bonds [task244_<timestamp>]` where only `Starlight Friends [task244_<timestamp>]` is expected.
+
+7. Command: `python scripts/benchmark_search_performance.py --iterations 5 --warmup 1 --seed-size 400 --budget-ms 350`
+- Result: PASS
+- Output summary: all benchmark scenarios under budget; p95 max observed `16.84ms`.
+
+## Per-Task Acceptance Verdict
+
+- Task #271 (backend filtering data model/query layer): PASS
+  - `BookFilterCriteria` present in `backend/repositories/books.py` with required fields.
+  - Query builder uses parameterized SQL placeholders (`%s`) and returns SQL+params.
+  - Optional criteria are conditionally applied; null/empty values are not forced.
+  - Relevance scoring terms are implemented and tested (`tests/test_books_repository_filters.py`, `tests/test_relevance_ranking.py`).
+  - STATUS includes query utility/relevance documentation (in current task update sections).
+
+- Task #272 (search API endpoint exposure): FAIL
+  - Endpoint/routes and parameter mapping exist and are covered by API tests.
+  - Error handling for invalid values and timeout paths exists.
+  - Regression detected in integration behavior for `/api/books` filter intersection:
+    - `genre` filter result set broader than expected test contract.
+    - combined filters return extra row when strict intersection is expected.
+
+- Task #273 (performance/relevance optimization): PASS
+  - Reproducible performance benchmark script exists and runs.
+  - Search index migration exists (`db/migrations/002_search_indexes.sql`).
+  - Query builder includes EXPLAIN-driven CTE rationale comments.
+  - Relevance ranking tests verify stronger multi-criteria ranking and spice-level top-result changes.
+  - STATUS includes performance profile, indexing, and relevance strategy.
+
+## Integration Issues
+- Tasks #271/#273 logic is wired into #272 API routes, but `/api/books` backward-compatibility behavior is not fully preserved under filter intersections.
+- This manifests as over-broad responses in two API integration tests.
+
+## Bugs Filed
+- `Legacy /api/books filtering returns over-broad results for genre intersections` (related task: #272)
+- `Combined /api/books filters do not enforce expected strict intersection` (related task: #272)
+
+## Overall Verdict
+- `BUGS_FILED`
